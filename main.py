@@ -64,11 +64,13 @@ class PhotoBooth:
 
     def update_loop(self):
         if self.is_running:
+            
             # Capture array is now BGR888
             frame = self.picam2.capture_array()
             
             # Fast BGR -> RGB conversion using NumPy slicing
             # This is significantly faster than PIL split/merge
+
             rgb_frame = frame
             
             img = Image.fromarray(rgb_frame).transpose(Image.FLIP_LEFT_RIGHT)
@@ -78,6 +80,7 @@ class PhotoBooth:
         
         # 16ms refresh targets ~60fps
         self.window.after(16, self.update_loop)
+        # try lower ms for faster + smoother experience
 
     def start_countdown(self):
         self.btn_start.place_forget()
@@ -140,9 +143,11 @@ class PhotoBooth:
             return self.add_grain(img, intensity=20)
         elif mode == "bw":
             img = ImageOps.grayscale(img).convert("RGB")
+            #add red under tones + vignette + increase highlights
+
             # Stronger contrast for B&W
             img = ImageOps.autocontrast(img, cutoff=2)
-            return self.add_grain(img, intensity=35)
+            return self.add_grain(img, intensity=25)
         return img
 
     def generate_collage(self, filter_type):
