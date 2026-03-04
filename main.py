@@ -1,9 +1,12 @@
 import time
 import os
 import sys
+import numpy as np  # Required for grain and sepia matrix
 import tkinter as tk
-from PIL import Image, ImageTk, ImageOps
+from PIL import Image, ImageTk, ImageOps, ImageEnhance # Added ImageEnhance
 from picamera2 import Picamera2
+
+#Standard Photobooth (not camera modded)
 
 class PhotoBooth:
     def __init__(self, window):
@@ -40,7 +43,6 @@ class PhotoBooth:
         self.overlay_label = tk.Label(window, text="", font=("Arial", 100, "bold"), fg="white", bg="black")
         self.flash_frame = tk.Frame(window, bg="white")
 
-        # Start Screen Labels
         self.welcome_label = tk.Label(window, text="Welcome to the xyz Photobooth\nPress start to create a memory", 
                                       font=("Arial", 24, "bold"), fg="white", bg="black", justify="center")
         self.welcome_label.place(relx=0.5, rely=0.4, anchor="center")
@@ -49,7 +51,6 @@ class PhotoBooth:
                                    font=("Arial", 30, "bold"), bg="#2ecc71", fg="white", padx=50)
         self.btn_start.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Side Control Panel (Hidden initially)
         self.controls = tk.Frame(window, bg="black")
 
         self.is_running = True
@@ -70,6 +71,46 @@ class PhotoBooth:
             self.preview_label.configure(image=imgtk)
         self.window.after(10, self.update_loop)
 
+    # --- FILTER LOGIC ---
+    def add_grain(self, img, intensity=15):
+        """Standard grain function with adjustable intensity"""
+        np_img = np.array(img).astype(np.float32)
+        noise = np.random.normal(0, intensity, np_img.shape)
+        np_img = np.clip(np_img + noise, 0, 255).astype(np.uint8)
+        return Image.fromarray(np_img)
+
+    def apply_filter(self, img, mode):
+        """Advanced filter logic with grain and enhancements"""
+        work_img = img.copy()
+
+        if mode == "fuji":
+            r, g, b = work_img.split()
+            work_img = Image.merge("RGB", (r.point(lambda i: i * 1.1), g.point(lambda i: i * 1.05), b.point(lambda i: i * 0.9)))
+            return self.add_grain(work_img, intensity=5)
+
+        elif mode == "bw":
+            work_img = ImageOps.grayscale(work_img).convert("RGB")
+            enhancer = ImageEnhance.Contrast(work_img)
+            work_img = enhancer.enhance(1.0) 
+            r, g, b = work_img.split()
+            work_img = Image.merge("RGB", (r.point(lambda i: i * 1.05), g, b))
+            return self.add_grain(work_img, intensity=10)
+
+        elif mode == "sepia":
+            sepia_matrix = np.array([[0.393, 0.769, 0.189], 
+                                     [0.349, 0.686, 0.168], 
+                                     [0.272, 0.534, 0.131]])
+            arr = np.array(work_img)
+            sepia_arr = arr.dot(sepia_matrix.T)
+            sepia_arr = np.clip(sepia_arr, 0, 255).astype(np.uint8)
+            work_img = Image.fromarray(sepia_arr)
+            enhancer = ImageEnhance.Contrast(work_img)
+            work_img = enhancer.enhance(1.0)
+            return self.add_grain(work_img, intensity=5)
+
+        return work_img
+
+    # --- CORE FLOW ---
     def start_countdown(self):
         self.btn_start.place_forget()
         self.welcome_label.place_forget()
@@ -101,7 +142,6 @@ class PhotoBooth:
         b, g, r, a = img.split()
         self.raw_photos.append(Image.merge("RGB", (r, g, b)))
         
-        # 0.125 seconds flash duration
         self.window.after(125, lambda: self.flash_frame.place_forget())
         self.window.after(500, self.finish_capture_step)
 
@@ -114,6 +154,7 @@ class PhotoBooth:
         self.overlay_label.config(text="GENERATING...", font=("Arial", 40, "bold"), fg="#f1c40f")
         self.overlay_label.place(relx=0.5, rely=0.5, anchor="center")
         self.window.update()
+        # Defaulting to fuji for initial generation
         self.window.after(1000, lambda: self.generate_collage("fuji"))
 
     def generate_collage(self, filter_type):
@@ -131,18 +172,9 @@ class PhotoBooth:
         imgtk = ImageTk.PhotoImage(image=display_img)
         self.preview_label.imgtk = imgtk
         self.preview_label.configure(image=imgtk)
-        # Shift image slightly left to make room for right-side buttons
         self.preview_label.pack_configure(padx=(0, 200))
 
         self.display_end_buttons()
-
-    def apply_filter(self, img, mode):
-        if mode == "fuji":
-            r, g, b = img.split()
-            return Image.merge("RGB", (r.point(lambda i: i * 1.25), g, b.point(lambda i: i * 0.6)))
-        elif mode == "bw":
-            return ImageOps.grayscale(img).convert("RGB")
-        return img
 
     def display_end_buttons(self):
         for widget in self.controls.winfo_children():
@@ -158,6 +190,10 @@ class PhotoBooth:
 
         tk.Button(self.controls, text="Black n white", command=lambda: self.generate_collage("bw"),
                   bg="#34495e", fg="white", font=("Arial", 12, "bold"), width=15).pack(pady=5)
+        
+        # New Sepia Button
+        tk.Button(self.controls, text="Sepia", command=lambda: self.generate_collage("sepia"),
+                  bg="#8B4513", fg="white", font=("Arial", 12, "bold"), width=15).pack(pady=5)
 
         tk.Button(self.controls, text="PRINT", command=self.save_and_restart,
                   bg="#2980b9", fg="white", font=("Arial", 15, "bold"), width=15).pack(pady=20)
