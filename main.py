@@ -1,6 +1,7 @@
 import time
 import os
 import sys
+import threading
 import numpy as np
 from PIL import Image, ImageOps, ImageEnhance
 
@@ -177,17 +178,63 @@ class PhotoBoothApp(App):
         return Image.fromarray(np.clip(np_img + noise, 0, 255).astype(np.uint8))
 
     def setup_controls(self):
-        
         self.controls.clear_widgets()
         self.controls.add_widget(Label(text="Filter", font_name=self.ui_font, bold=True, font_size='30sp', size_hint_y=0.2))
         
-        for label, mode in [("Retro Fuji", "fuji"), ("Black n White", "bw"), ("Sepia", "sepia")]:
-            btn = Button(text=label, font_name=self.ui_font, font_size='24sp', on_press=lambda x, m=mode: self.generate_collage(m))
-            self.controls.add_widget(btn)
+        # We store buttons in a list so we can disable them all at once
+        self.filter_buttons = []
         
-        btn_save = Button(text="SAVE & FINISH", font_name=self.ui_font, font_size='28sp', background_color=get_color_from_hex('#2980b9'), bold=True)
-        btn_save.bind(on_press=self.show_collection_screen)
-        self.controls.add_widget(btn_save)
+        for label, mode in [("Retro Fuji", "fuji"), ("Black n White", "bw"), ("Sepia", "sepia")]:
+            btn = Button(text=label, font_name=self.ui_font, font_size='24sp')
+            # Use a partial or lambda, but ensure we call the new threaded launcher
+            btn.bind(on_press=lambda x, m=mode: self.launch_filter_thread(m))
+            self.controls.add_widget(btn)
+            self.filter_buttons.append(btn)
+            
+        self.btn_save = Button(text="SAVE & FINISH", font_name=self.ui_font, font_size='28sp', 
+                               background_color=get_color_from_hex('#2980b9'), bold=True)
+        
+        self.btn_save.bind(on_press=self.show_collection_screen)
+        self.controls.add_widget(self.btn_save)
+        self.filter_buttons.append(self.btn_save)
+
+    def launch_filter_thread(self, filter_type):
+        """Step 1: Disable UI and start background work"""
+        for btn in self.filter_buttons:
+            btn.disabled = True
+        
+        self.overlay_label.text = "Applying..."
+        self.overlay_label.font_size = '40sp'
+        
+        # Run the heavy math in a separate thread
+        threading.Thread(target=self.process_filter_background, args=(filter_type,)).start()
+
+    def process_filter_background(self, filter_type):
+        """Step 2: The heavy lifting happens here (Background Thread)"""
+        strip_w, strip_h = 600, 1800
+        photo_h = 450
+        strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
+        
+        for i, img in enumerate(self.raw_photos):
+            processed = self.apply_filter(img, filter_type)
+            processed = ImageOps.fit(processed, (strip_w, photo_h), Image.Resampling.LANCZOS)
+            strip.paste(processed, (0, i * photo_h))
+        
+        self.current_strip = strip
+        strip.save("temp_preview.jpg")
+        
+        # Step 3: Tell the Main Thread to update the UI
+        Clock.schedule_once(self.update_ui_after_filter, 0)
+
+    def update_ui_after_filter(self, dt):
+        """Step 4: Update the screen and re-enable buttons (Main Thread)"""
+        self.img_widget.source = "temp_preview.jpg"
+        self.img_widget.reload()
+        self.overlay_label.text = ""
+        
+        # Re-enable buttons
+        for btn in self.filter_buttons:
+            btn.disabled = False
 
     def start_session(self, instance):
         self.btn_start.disabled = True
