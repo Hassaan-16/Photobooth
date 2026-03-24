@@ -2,318 +2,228 @@ import time
 import os
 import sys
 import threading
+import subprocess
 import numpy as np
 from PIL import Image, ImageOps, ImageEnhance
 
-# 1. Kivy System Configuration (Waveshare 7-inch)
+# 1. Kivy System Configuration
 from kivy.config import Config
-
 Config.set('graphics', 'width', '1024')
 Config.set('graphics', 'height', '600')
 Config.set('graphics', 'fullscreen', 'auto')
-Config.set('graphics', 'resizable', '0')
 Config.set('graphics', 'show_cursor', '1') 
 
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.image import Image as KivyImage
 from kivy.clock import Clock
 from kivy.graphics.texture import Texture
-from kivy.graphics import Color, Rectangle
+from kivy.graphics import Color, Rectangle, Ellipse
 from kivy.core.window import Window
-from kivy.utils import get_color_from_hex
 
 from picamera2 import Picamera2
 
 class PhotoBoothApp(App):
-
     def build(self):
-        Window.clearcolor = (0, 0, 0, 1)
+        Window.clearcolor = (0, 0, 0, 1) # Sets the global background to Black
         Window.bind(on_keyboard=self.on_keyboard)
 
-        # --- FONT SETTINGS ---
-        possible_paths = [
-            "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf",
-            "/usr/share/fonts/truetype/msttcorefonts/times.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"
-        ]
-
-        self.ui_font = "Roboto" 
-
-        for path in possible_paths:
-            if os.path.exists(path):
-                self.ui_font = path
-                break
-
-        self.save_path = "./gallery"
-        if not os.path.exists(self.save_path): 
-            os.makedirs(self.save_path)
+        self.asset_path = os.path.join(os.path.dirname(__file__), "assets")
+        self.save_path = os.path.join(os.path.dirname(__file__), "gallery")
+        if not os.path.exists(self.save_path): os.makedirs(self.save_path)
 
         # --- CAMERA HARDWARE ---
         self.picam2 = None
-
         try:
             self.picam2 = Picamera2()
             self.picam2.configure(self.picam2.create_preview_configuration(
-                main={"format": "XRGB8888", "size": (800, 600)}
+                main={"format": "XRGB8888", "size": (1024, 600)}
             ))
             self.picam2.start()
-
         except Exception as e:
             print(f"Hardware Error: {e}"); self.safe_exit()
 
-        # --- ROOT UI ---
         self.root = FloatLayout()
         
-        # 1. Camera Preview
-        self.img_widget = KivyImage(fit_mode="contain") 
+        # 1. Background Manager
+        self.bg_manager = KivyImage(source=os.path.join(self.asset_path, 'welcome.png'), 
+                                    allow_stretch=True, keep_ratio=False)
+        self.root.add_widget(self.bg_manager)
+
+        # 2. Camera Preview / Photo Strip
+        # fit_mode="contain" with black background creates the black borders you want
+        self.img_widget = KivyImage(fit_mode="contain", size_hint=(1, 1), 
+                                    pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                                    opacity=0) 
         self.root.add_widget(self.img_widget)
 
-        # 2. Welcome Box
-        self.welcome_box = BoxLayout(orientation='vertical', size_hint=(0.9, 0.4),
-                                    pos_hint={'center_x': 0.5, 'center_y': 0.70})
-        
-        self.lbl_main = Label(text="Welcome to XYZ Photobooth", font_size='100sp', 
-                              font_name=self.ui_font, color=(1,1,1,1))
-        
-        self.lbl_sub = Label(text="Press start to create memories", font_size='65sp', 
-                             font_name=self.ui_font, color=(0.8,0.8,0.8,1))
-        
-        self.welcome_box.add_widget(self.lbl_main)
-        self.welcome_box.add_widget(self.lbl_sub)
-        self.root.add_widget(self.welcome_box)
+        # 3. Filter Sidebar
+        self.filter_layer = FloatLayout(size_hint=(1, 1), opacity=0, disabled=True)
+        self.setup_circular_filters()
+        self.root.add_widget(self.filter_layer)
 
-        # 3. Start Button
-        self.btn_start = Button(text="START", size_hint=(0.3, 0.2),
-                                pos_hint={'center_x': 0.5, 'center_y': 0.35},
-                                background_normal='', background_color=(1, 1, 1, 1),
-                                color=(0, 0, 0, 1), font_size='50sp', 
-                                font_name=self.ui_font, bold=True)
-        
-        self.btn_start.bind(on_press=self.start_session)
-        self.root.add_widget(self.btn_start)
+        # 4. Status Label (Top Right for "Applying")
+        self.status_label = Label(text="", font_size='30sp', color=(1,1,1,1),
+                                 size_hint=(None, None), size=(200, 50),
+                                 pos_hint={'right': 0.98, 'top': 0.98})
+        self.root.add_widget(self.status_label)
 
-        # 4. Filter Sidebar (Disabled and Invisible at start)
-        self.controls = BoxLayout(orientation='vertical', size_hint=(0.25, 0.8),
-                                 pos_hint={'right': 0.98, 'center_y': 0.5},
-                                 spacing=15, opacity=0, disabled=True)
-        self.setup_controls()
-        self.root.add_widget(self.controls)
-
-        # 5. Countdown Label
+        # 5. Countdown Label (Center)
         self.overlay_label = Label(text="", font_size='250sp', color=(1,1,1,1))
         self.root.add_widget(self.overlay_label)
 
-        # 6. Topmost Flash & Ending Layer
-        self.flash_layer = FloatLayout(size_hint=(1,1))
-        with self.flash_layer.canvas:
+        # 6. Welcome Button Layer (Small button, centered-bottom)
+        self.welcome_layer = FloatLayout(size_hint=(1, 1))
+        self.btn_start = Button(size_hint=(0.2, 0.15), 
+                                pos_hint={'center_x': 0.5, 'center_y': 0.35},
+                                background_normal='', background_color=(1, 1, 0, 0.5))
+        self.btn_start.bind(on_press=self.start_session)
+        self.welcome_layer.add_widget(self.btn_start)
+        self.root.add_widget(self.welcome_layer)
+
+        # 7. Flash
+        with self.root.canvas.after:
             self.flash_color = Color(1, 1, 1, 0)
             self.flash_rect = Rectangle(size=Window.size, pos=(0,0))
-        
-        self.collect_label = Label(text="Collect Print from\noutside the booth", 
-                                   font_size='125sp', font_name=self.ui_font,
-                                   color=(0, 0, 0, 1), halign='center', opacity=0)
-        
-        self.flash_layer.add_widget(self.collect_label)
-        self.root.add_widget(self.flash_layer)
 
-        Window.bind(size=self._update_flash_rect)
-
-        # State Variables
-        self.is_running = True
+        self.is_running = False
         self.photo_count = 0
         self.raw_photos = []
-        self.current_strip = None
         
         Clock.schedule_interval(self.update_loop, 1.0 / 30.0)
         return self.root
 
-    # --- SYSTEM METHODS ---
-    def _update_flash_rect(self, instance, value):
-        
-        self.flash_rect.size = value
-        self.flash_rect.pos = (0, 0)
-
-    def on_keyboard(self, window, key, scancode, codepoint, modifier):
-        if key == 27: self.safe_exit(); return True
-        return False
-
-    def update_loop(self, dt):
-        
-        if self.is_running and self.picam2:
-            frame = self.picam2.capture_array()
-            h, w, _ = frame.shape
-            texture = Texture.create(size=(w, h), colorfmt='rgba')
-            texture.blit_buffer(frame.tobytes(), colorfmt='bgra', bufferfmt='ubyte')
-            texture.flip_vertical()
-            self.img_widget.texture = texture
-
-    def safe_exit(self):
-        if self.picam2: self.picam2.stop(); self.picam2.close()
-        os._exit(0)
-
-    # --- PHOTO LOGIC ---
-    def apply_filter(self, img, mode):
-        
-        work_img = img.copy()
-        
-        if mode == "fuji":
-            r, g, b = work_img.split()
-            work_img = Image.merge("RGB", (r.point(lambda i: i * 1.1), g.point(lambda i: i * 1.05), b.point(lambda i: i * 0.9)))
-        
-        elif mode == "bw":
-            work_img = ImageOps.grayscale(work_img).convert("RGB")
-        
-        elif mode == "sepia":
-            sepia_matrix = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
-            arr = np.array(work_img); sepia_arr = np.clip(arr.dot(sepia_matrix.T), 0, 255).astype(np.uint8)
-            work_img = Image.fromarray(sepia_arr)
-        
-        np_img = np.array(work_img).astype(np.float32)
-        noise = np.random.normal(0, 8, np_img.shape)
-        
-        return Image.fromarray(np.clip(np_img + noise, 0, 255).astype(np.uint8))
-
-    def setup_controls(self):
-        self.controls.clear_widgets()
-        self.controls.add_widget(Label(text="Filter", font_name=self.ui_font, bold=True, font_size='30sp', size_hint_y=0.2))
-        
-        # We store buttons in a list so we can disable them all at once
-        self.filter_buttons = []
-        
-        for label, mode in [("Retro Fuji", "fuji"), ("Black n White", "bw"), ("Sepia", "sepia")]:
-            btn = Button(text=label, font_name=self.ui_font, font_size='24sp')
-            # Use a partial or lambda, but ensure we call the new threaded launcher
+    def setup_circular_filters(self):
+        configs = [
+            ('fuji', {'center_x': 0.88, 'center_y': 0.75}),
+            ('bw', {'center_x': 0.88, 'center_y': 0.55}),
+            ('sepia', {'center_x': 0.88, 'center_y': 0.35})
+        ]
+        self.filter_btns = []
+        for mode, pos in configs:
+            btn = Button(size_hint=(None, None), size=(110, 110), pos_hint=pos,
+                         background_normal='', background_color=(0,0,0,0))
+            with btn.canvas.before:
+                Color(1, 1, 0, 0.5)
+                btn.shape = Ellipse(size=btn.size, pos=btn.pos)
+            btn.bind(pos=self._update_shape, size=self._update_shape)
             btn.bind(on_press=lambda x, m=mode: self.launch_filter_thread(m))
-            self.controls.add_widget(btn)
-            self.filter_buttons.append(btn)
-            
-        self.btn_save = Button(text="SAVE & FINISH", font_name=self.ui_font, font_size='28sp', 
-                               background_color=get_color_from_hex('#2980b9'), bold=True)
-        
-        self.btn_save.bind(on_press=self.show_collection_screen)
-        self.controls.add_widget(self.btn_save)
-        self.filter_buttons.append(self.btn_save)
+            self.filter_layer.add_widget(btn)
+            self.filter_btns.append(btn)
 
-    def launch_filter_thread(self, filter_type):
-        """Step 1: Disable UI and start background work"""
-        for btn in self.filter_buttons:
-            btn.disabled = True
-        
-        self.overlay_label.text = "Applying..."
-        self.overlay_label.font_size = '40sp'
-        
-        # Run the heavy math in a separate thread
-        threading.Thread(target=self.process_filter_background, args=(filter_type,)).start()
+        # Print Button
+        self.btn_print = Button(size_hint=(0.2, 0.15), pos_hint={'center_x': 0.88, 'center_y': 0.12},
+                                background_normal='', background_color=(1, 1, 0, 0.5))
+        self.btn_print.bind(on_press=self.initiate_print_flow)
+        self.filter_layer.add_widget(self.btn_print)
+        self.filter_btns.append(self.btn_print)
 
-    def process_filter_background(self, filter_type):
-        """Step 2: The heavy lifting happens here (Background Thread)"""
-        strip_w, strip_h = 600, 1800
-        photo_h = 450
-        strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
-        
-        for i, img in enumerate(self.raw_photos):
-            processed = self.apply_filter(img, filter_type)
-            processed = ImageOps.fit(processed, (strip_w, photo_h), Image.Resampling.LANCZOS)
-            strip.paste(processed, (0, i * photo_h))
-        
-        self.current_strip = strip
-        strip.save("temp_preview.jpg")
-        
-        # Step 3: Tell the Main Thread to update the UI
-        Clock.schedule_once(self.update_ui_after_filter, 0)
-
-    def update_ui_after_filter(self, dt):
-        """Step 4: Update the screen and re-enable buttons (Main Thread)"""
-        self.img_widget.source = "temp_preview.jpg"
-        self.img_widget.reload()
-        self.overlay_label.text = ""
-        
-        # Re-enable buttons
-        for btn in self.filter_buttons:
-            btn.disabled = False
+    def _update_shape(self, inst, val):
+        inst.shape.pos, inst.shape.size = inst.pos, inst.size
 
     def start_session(self, instance):
-        self.btn_start.disabled = True
-        self.btn_start.opacity = 0
-        self.welcome_box.opacity = 0
-        self.raw_photos = []
+        # Remove the welcome layer so it doesn't block the filter screen later
+        if self.welcome_layer in self.root.children:
+            self.root.remove_widget(self.welcome_layer)
+        
+        self.bg_manager.source = "" # Black Background
+        self.img_widget.opacity = 1
+        self.is_running = True
         self.photo_count = 0
+        self.raw_photos = []
         self.run_sequence()
 
     def run_sequence(self):
-        
-        if self.photo_count == 0: self.start_countdown(5)
-        
-        elif self.photo_count < 4:
-            self.overlay_label.text = "Pose Again"; self.overlay_label.font_name = self.ui_font; self.overlay_label.font_size = '100sp'
-            Clock.schedule_once(lambda dt: self.start_countdown(3), 2.0)
-        
-        else: self.show_loading()
+        if self.photo_count < 4:
+            self.overlay_label.text = "POSE!"
+            Clock.schedule_once(self.start_countdown, 1.5)
+        else:
+            self.show_loading()
 
-    def start_countdown(self, seconds):
-        
-        self.overlay_label.font_name = "Roboto"; self.overlay_label.font_size = '250sp'
-        self.count = seconds; self.overlay_label.text = str(self.count); self.count -= 1
-        Clock.schedule_interval(self.tick_countdown, 1.0)
+    def start_countdown(self, dt):
+        self.count = 3
+        self.overlay_label.text = str(self.count)
+        Clock.schedule_interval(self.tick, 1.0)
 
-    def tick_countdown(self, dt):
-        
-        if self.count > 0: self.overlay_label.text = str(self.count); self.count -= 1; return True
-        
-        else: self.overlay_label.text = ""; self.trigger_flash_and_capture(); return False
+    def tick(self, dt):
+        self.count -= 1
+        if self.count > 0:
+            self.overlay_label.text = str(self.count); return True
+        else:
+            self.overlay_label.text = ""; self.capture_photo(); return False
 
-    def trigger_flash_and_capture(self):
+    def capture_photo(self):
         self.flash_color.a = 1
-        frame = self.picam2.capture_array(); img = Image.fromarray(frame); b, g, r, a = img.split()
+        frame = self.picam2.capture_array()
+        img = Image.fromarray(frame); b, g, r, a = img.split()
         self.raw_photos.append(Image.merge("RGB", (r, g, b)))
-        Clock.schedule_once(lambda dt: setattr(self.flash_color, 'a', 0), 0.125)
+        Clock.schedule_once(lambda dt: setattr(self.flash_color, 'a', 0), 0.1)
         self.photo_count += 1
-        Clock.schedule_once(lambda dt: self.run_sequence(), 0.5)
+        self.run_sequence()
 
     def show_loading(self):
-        self.is_running = False; self.overlay_label.font_name = self.ui_font; self.overlay_label.font_size = '80sp'; self.overlay_label.text = "GENERATING..."
-        Clock.schedule_once(lambda dt: self.generate_collage("fuji"), 0.5)
+        self.is_running = False
+        self.status_label.text = "Applying Fuji..."
+        threading.Thread(target=self.process_background, args=("fuji",)).start()
 
-    def generate_collage(self, filter_type):
-        strip_w, strip_h = 600, 1800; photo_h = 450
+    def launch_filter_thread(self, mode):
+        for b in self.filter_btns: b.disabled = True
+        self.status_label.text = f"Applying {mode}..."
+        threading.Thread(target=self.process_background, args=(mode,)).start()
+
+    def process_background(self, mode):
+        strip_w, strip_h, photo_h = 600, 1800, 450
         strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
-        
         for i, img in enumerate(self.raw_photos):
-            processed = ImageOps.fit(self.apply_filter(img, filter_type), (strip_w, photo_h), Image.Resampling.LANCZOS)
-            strip.paste(processed, (0, i * photo_h))
-        
+            work = img.copy()
+            if mode == "bw": work = ImageOps.grayscale(work).convert("RGB")
+            elif mode == "sepia":
+                sepia = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
+                work = Image.fromarray(np.clip(np.array(work).dot(sepia.T), 0, 255).astype(np.uint8))
+            res = ImageOps.fit(work, (strip_w, photo_h), Image.Resampling.LANCZOS)
+            strip.paste(res, (0, i * photo_h))
         self.current_strip = strip
         strip.save("temp_preview.jpg")
-        self.img_widget.source = "temp_preview.jpg"; self.img_widget.reload(); self.img_widget.pos_hint = {'center_x': 0.4, 'center_y': 0.5}
+        Clock.schedule_once(self.display_filter_results, 0)
+
+    def display_filter_results(self, dt):
+        self.bg_manager.source = os.path.join(self.asset_path, 'filter.png')
+        self.img_widget.source = "temp_preview.jpg"; self.img_widget.reload()
+        self.status_label.text = ""
+        self.filter_layer.opacity, self.filter_layer.disabled = 1, False
+        for b in self.filter_btns: b.disabled = False
+
+    def initiate_print_flow(self, instance):
+        self.bg_manager.source = os.path.join(self.asset_path, 'thankyou.png')
+        self.filter_layer.opacity, self.filter_layer.disabled, self.img_widget.opacity = 0, True, 0
         
-        # ENABLE CONTROLS ONLY NOW
-        self.controls.opacity = 1
-        self.controls.disabled = False
-        self.overlay_label.text = ""
-
-    def show_collection_screen(self, instance):
-
+        # Test: Save image only
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         canvas.paste(self.current_strip, (0, 0)); canvas.paste(self.current_strip, (600, 0))
-        canvas.save(os.path.join(self.save_path, f"booth_{int(time.time())}.jpg"), quality=95)
+        canvas.save(os.path.join(self.save_path, f"print_{int(time.time())}.jpg"))
         
-        self.flash_color.a = 1; self.collect_label.opacity = 1
-        
-        # DISABLE CONTROLS AGAIN
-        self.controls.opacity = 0
-        self.controls.disabled = True
-        
-        Clock.schedule_once(self.reset_to_start, 20.0)
+        Clock.schedule_once(self.reset_to_start, 30.0)
 
     def reset_to_start(self, dt):
-        self.flash_color.a = 0; self.collect_label.opacity = 0
-        self.img_widget.source = ""; self.img_widget.pos_hint = {'center_x': 0.5, 'center_y': 0.5}
-        self.welcome_box.opacity = 1; self.btn_start.opacity = 1; self.btn_start.disabled = False
-        self.is_running = True
+        if self.welcome_layer not in self.root.children:
+            self.root.add_widget(self.welcome_layer)
+        self.bg_manager.source = os.path.join(self.asset_path, 'welcome.png')
+        self.img_widget.source, self.img_widget.opacity, self.is_running = "", 0, False
+
+    def update_loop(self, dt):
+        if self.is_running and self.picam2:
+            frame = self.picam2.capture_array()
+            texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='rgba')
+            texture.blit_buffer(frame.tobytes(), colorfmt='bgra', bufferfmt='ubyte')
+            texture.flip_vertical(); self.img_widget.texture = texture
+
+    def on_keyboard(self, w, k, s, c, m):
+        if k == 27: self.safe_exit(); return True
+    def safe_exit(self):
+        if self.picam2: self.picam2.stop(); self.picam2.close()
+        os._exit(0)
 
 if __name__ == "__main__":
     PhotoBoothApp().run()
