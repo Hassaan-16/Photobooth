@@ -27,7 +27,7 @@ from picamera2 import Picamera2
 
 class PhotoBoothApp(App):
     def build(self):
-        Window.clearcolor = (0, 0, 0, 1) # Sets the global background to Black
+        Window.clearcolor = (0, 0, 0, 1) 
         Window.bind(on_keyboard=self.on_keyboard)
 
         self.asset_path = os.path.join(os.path.dirname(__file__), "assets")
@@ -52,32 +52,37 @@ class PhotoBoothApp(App):
                                     allow_stretch=True, keep_ratio=False)
         self.root.add_widget(self.bg_manager)
 
-        # 2. Camera Preview / Photo Strip
-        # fit_mode="contain" with black background creates the black borders you want
+        # 2a. Live Camera Preview (Centered for "Pose" phase)
         self.img_widget = KivyImage(fit_mode="contain", size_hint=(1, 1), 
                                     pos_hint={'center_x': 0.5, 'center_y': 0.5},
                                     opacity=0) 
         self.root.add_widget(self.img_widget)
+
+        # 2b. Final Collage Preview (Offset to 0.25 for "Filter" phase)
+        self.collage_widget = KivyImage(fit_mode="contain", size_hint=(1, 1), 
+                                        pos_hint={'center_x': 0.25, 'center_y': 0.5},
+                                        opacity=0) 
+        self.root.add_widget(self.collage_widget)
 
         # 3. Filter Sidebar
         self.filter_layer = FloatLayout(size_hint=(1, 1), opacity=0, disabled=True)
         self.setup_circular_filters()
         self.root.add_widget(self.filter_layer)
 
-        # 4. Status Label (Top Right for "Applying")
+        # 4. Status Label (Top Right)
         self.status_label = Label(text="", font_size='30sp', color=(1,1,1,1),
                                  size_hint=(None, None), size=(200, 50),
                                  pos_hint={'right': 0.98, 'top': 0.98})
         self.root.add_widget(self.status_label)
 
-        # 5. Countdown Label (Center)
+        # 5. Countdown Label
         self.overlay_label = Label(text="", font_size='250sp', color=(1,1,1,1))
         self.root.add_widget(self.overlay_label)
 
-        # 6. Welcome Button Layer (Small button, centered-bottom)
+        # 6. Welcome Button Layer (Restored to center_y: 0.35)
         self.welcome_layer = FloatLayout(size_hint=(1, 1))
-        self.btn_start = Button(size_hint=(0.2, 0.15), 
-                                pos_hint={'center_x': 0.5, 'center_y': 0.35},
+        self.btn_start = Button(size_hint=(0.40, 0.21), 
+                                pos_hint={'center_x': 0.5, 'center_y': 0.26},
                                 background_normal='', background_color=(1, 1, 0, 0.5))
         self.btn_start.bind(on_press=self.start_session)
         self.welcome_layer.add_widget(self.btn_start)
@@ -96,14 +101,15 @@ class PhotoBoothApp(App):
         return self.root
 
     def setup_circular_filters(self):
+        # Restored to center_x: 0.88 as per your working script
         configs = [
-            ('fuji', {'center_x': 0.88, 'center_y': 0.75}),
-            ('bw', {'center_x': 0.88, 'center_y': 0.55}),
-            ('sepia', {'center_x': 0.88, 'center_y': 0.35})
+            ('fuji', {'center_x': 0.73, 'center_y': 0.79}),
+            ## ('bw', {'center_x': 0.88, 'center_y': 0.55}),
+            ('sepia', {'center_x': 0.74, 'center_y': 0.50})
         ]
         self.filter_btns = []
         for mode, pos in configs:
-            btn = Button(size_hint=(None, None), size=(110, 110), pos_hint=pos,
+            btn = Button(size_hint=(None, None), size=(300, 300), pos_hint=pos,
                          background_normal='', background_color=(0,0,0,0))
             with btn.canvas.before:
                 Color(1, 1, 0, 0.5)
@@ -113,8 +119,8 @@ class PhotoBoothApp(App):
             self.filter_layer.add_widget(btn)
             self.filter_btns.append(btn)
 
-        # Print Button
-        self.btn_print = Button(size_hint=(0.2, 0.15), pos_hint={'center_x': 0.88, 'center_y': 0.12},
+        # Print Button (Restored to center_x: 0.88)
+        self.btn_print = Button(size_hint=(0.31, 0.18), pos_hint={'center_x': 0.73, 'center_y': 0.18},
                                 background_normal='', background_color=(1, 1, 0, 0.5))
         self.btn_print.bind(on_press=self.initiate_print_flow)
         self.filter_layer.add_widget(self.btn_print)
@@ -124,12 +130,12 @@ class PhotoBoothApp(App):
         inst.shape.pos, inst.shape.size = inst.pos, inst.size
 
     def start_session(self, instance):
-        # Remove the welcome layer so it doesn't block the filter screen later
         if self.welcome_layer in self.root.children:
             self.root.remove_widget(self.welcome_layer)
         
-        self.bg_manager.source = "" # Black Background
+        self.bg_manager.source = "" 
         self.img_widget.opacity = 1
+        self.collage_widget.opacity = 0
         self.is_running = True
         self.photo_count = 0
         self.raw_photos = []
@@ -178,7 +184,8 @@ class PhotoBoothApp(App):
         strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
         for i, img in enumerate(self.raw_photos):
             work = img.copy()
-            if mode == "bw": work = ImageOps.grayscale(work).convert("RGB")
+            if mode == "bw": 
+                work = ImageOps.grayscale(work).convert("RGB")
             elif mode == "sepia":
                 sepia = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
                 work = Image.fromarray(np.clip(np.array(work).dot(sepia.T), 0, 255).astype(np.uint8))
@@ -190,16 +197,19 @@ class PhotoBoothApp(App):
 
     def display_filter_results(self, dt):
         self.bg_manager.source = os.path.join(self.asset_path, 'filter.png')
-        self.img_widget.source = "temp_preview.jpg"; self.img_widget.reload()
+        self.img_widget.opacity = 0
+        self.collage_widget.source = "temp_preview.jpg"
+        self.collage_widget.reload()
+        self.collage_widget.opacity = 1
         self.status_label.text = ""
         self.filter_layer.opacity, self.filter_layer.disabled = 1, False
         for b in self.filter_btns: b.disabled = False
 
     def initiate_print_flow(self, instance):
         self.bg_manager.source = os.path.join(self.asset_path, 'thankyou.png')
-        self.filter_layer.opacity, self.filter_layer.disabled, self.img_widget.opacity = 0, True, 0
+        self.filter_layer.opacity, self.filter_layer.disabled = 0, True
+        self.collage_widget.opacity = 0
         
-        # Test: Save image only
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         canvas.paste(self.current_strip, (0, 0)); canvas.paste(self.current_strip, (600, 0))
         canvas.save(os.path.join(self.save_path, f"print_{int(time.time())}.jpg"))
@@ -210,7 +220,11 @@ class PhotoBoothApp(App):
         if self.welcome_layer not in self.root.children:
             self.root.add_widget(self.welcome_layer)
         self.bg_manager.source = os.path.join(self.asset_path, 'welcome.png')
-        self.img_widget.source, self.img_widget.opacity, self.is_running = "", 0, False
+        self.img_widget.source = ""
+        self.img_widget.opacity = 0
+        self.collage_widget.source = ""
+        self.collage_widget.opacity = 0
+        self.is_running = False
 
     def update_loop(self, dt):
         if self.is_running and self.picam2:
