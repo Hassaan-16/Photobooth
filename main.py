@@ -118,6 +118,8 @@ class PhotoBoothApp(App):
         self.photo_count = 0
         self.raw_photos = []
         
+        self.active_filter = "fuji" # Fuji is the default starting filter
+
         Clock.schedule_interval(self.update_loop, 1.0 / 30.0)
         return self.root
 
@@ -196,12 +198,28 @@ class PhotoBoothApp(App):
     def show_loading(self):
         self.is_running = False
         self.status_label.text = "Applying Fuji..."
+        self.active_filter = "fuji" # Sync the state
         threading.Thread(target=self.process_background, args=("fuji",)).start()
 
     def launch_filter_thread(self, mode):
-        for b in self.filter_btns: b.disabled = True
+        # 1. Check if the filter is already the active one
+        if mode == self.active_filter:
+            self.status_label.text = "APPLIED!"
+            # Just clear the message after 1 second, no processing needed
+            Clock.schedule_once(self.clear_status_message, 1.0)
+            return
+
+        # 2. If it's a NEW filter, proceed with processing as usual
+        for b in self.filter_btns: 
+            b.disabled = True
+            
         self.status_label.text = f"Applying {mode}..."
+        # Update the state to the new filter
+        self.active_filter = mode 
         threading.Thread(target=self.process_background, args=(mode,)).start()
+
+    def clear_status_message(self, dt):
+        self.status_label.text = ""
 
     def process_background(self, mode):
         strip_w, strip_h, photo_h = 564, 1800, 450 
