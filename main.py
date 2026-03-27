@@ -204,7 +204,9 @@ class PhotoBoothApp(App):
         threading.Thread(target=self.process_background, args=(mode,)).start()
 
     def process_background(self, mode):
-        strip_w, strip_h, photo_h = 600, 1800, 450
+        strip_w, strip_h, photo_h = 564, 1800, 450 
+        # 564 instead of 600 here 
+        # accomodates the white strip in between
         
         # 1. Generate single strip
         single_strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
@@ -244,9 +246,28 @@ class PhotoBoothApp(App):
         self.collage_left.opacity = 0
         self.collage_right.opacity = 0
         
+        # --- FINAL PRINT LAYOUT SETTINGS ---
+        strip_w = 564  # Matches your process_background setting
+        gap_px = 71    # Approx 6mm at 300 DPI
+        
+        # Create 4x6 canvas (1200x1800 pixels)
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
-        canvas.paste(self.current_strip, (0, 0)); canvas.paste(self.current_strip, (600, 0))
-        canvas.save(os.path.join(self.save_path, f"print_{int(time.time())}.jpg"))
+        
+        # Paste first strip at the left edge
+        canvas.paste(self.current_strip, (0, 0))
+        
+        # Paste second strip after the first strip + 6mm gap
+        # 564 + 71 = 635
+        canvas.paste(self.current_strip, (strip_w + gap_px, 0))
+        
+        # Save the final file to gallery
+        save_file = os.path.join(self.save_path, f"print_{int(time.time())}.jpg")
+        canvas.save(save_file, quality=95)
+        
+        # To print to the actual printer, uncomment the lines below:
+        # temp_print = "/tmp/to_printer.jpg"
+        # canvas.save(temp_print)
+        # subprocess.run(["lp", "-d", "EPSON_L3250_Series", "-o", "PageSize=4X6FULL", "-o", "StpBorderless=True", temp_print])
         
         Clock.schedule_once(self.reset_to_start, 30.0)
 
