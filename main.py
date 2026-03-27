@@ -20,7 +20,7 @@ from kivy.uix.label import Label
 from kivy.uix.image import Image as KivyImage
 from kivy.clock import Clock
 from kivy.graphics.texture import Texture
-from kivy.graphics import Color, Rectangle, Ellipse
+from kivy.graphics import Color, Rectangle, Ellipse, PushMatrix, PopMatrix, Rotate
 from kivy.core.window import Window
 
 from picamera2 import Picamera2
@@ -52,24 +52,45 @@ class PhotoBoothApp(App):
                                     allow_stretch=True, keep_ratio=False)
         self.root.add_widget(self.bg_manager)
 
-        # 2a. Live Camera Preview (Centered for "Pose" phase)
+        # 2a. Live Camera Preview (Centered)
         self.img_widget = KivyImage(fit_mode="contain", size_hint=(1, 1), 
                                     pos_hint={'center_x': 0.5, 'center_y': 0.5},
                                     opacity=0) 
         self.root.add_widget(self.img_widget)
 
-        # 2b. Final Collage Preview (Offset to 0.25 for "Filter" phase)
-        self.collage_widget = KivyImage(fit_mode="contain", size_hint=(1, 1), 
-                                        pos_hint={'center_x': 0.25, 'center_y': 0.5},
-                                        opacity=0) 
-        self.root.add_widget(self.collage_widget)
+        # 2b. LEFT STRIP (Independent)
+        self.collage_left = KivyImage(fit_mode="contain", size_hint=(0.45, 0.86), 
+                                      pos_hint={'center_x': 0.20, 'center_y': 0.53},
+                                      opacity=0)
+        with self.collage_left.canvas.before:
+            PushMatrix()
+            self.rot_left = Rotate(angle=3.5, origin=self.collage_left.center)
+        with self.collage_left.canvas.after:
+            PopMatrix()
+            
+        # 2c. RIGHT STRIP (Independent)
+        self.collage_right = KivyImage(fit_mode="contain", size_hint=(0.63, 0.95), 
+                                       pos_hint={'center_x': 0.40, 'center_y': 0.5},
+                                       opacity=0)
+        with self.collage_right.canvas.before:
+            PushMatrix()
+            self.rot_right = Rotate(angle=-4.5, origin=self.collage_right.center)
+        with self.collage_right.canvas.after:
+            PopMatrix()
+
+        # Update rotation origins for both
+        self.collage_left.bind(pos=self._update_rot_left, size=self._update_rot_left)
+        self.collage_right.bind(pos=self._update_rot_right, size=self._update_rot_right)
+        
+        self.root.add_widget(self.collage_left)
+        self.root.add_widget(self.collage_right)
 
         # 3. Filter Sidebar
         self.filter_layer = FloatLayout(size_hint=(1, 1), opacity=0, disabled=True)
         self.setup_circular_filters()
         self.root.add_widget(self.filter_layer)
 
-        # 4. Status Label (Top Right)
+        # 4. Status Label
         self.status_label = Label(text="", font_size='30sp', color=(1,1,1,1),
                                  size_hint=(None, None), size=(200, 50),
                                  pos_hint={'right': 0.98, 'top': 0.98})
@@ -79,7 +100,7 @@ class PhotoBoothApp(App):
         self.overlay_label = Label(text="", font_size='250sp', color=(1,1,1,1))
         self.root.add_widget(self.overlay_label)
 
-        # 6. Welcome Button Layer (Restored to center_y: 0.35)
+        # 6. Welcome Button Layer
         self.welcome_layer = FloatLayout(size_hint=(1, 1))
         self.btn_start = Button(size_hint=(0.40, 0.21), 
                                 pos_hint={'center_x': 0.5, 'center_y': 0.26},
@@ -100,16 +121,18 @@ class PhotoBoothApp(App):
         Clock.schedule_interval(self.update_loop, 1.0 / 30.0)
         return self.root
 
+    # Update Rotation Helpers
+    def _update_rot_left(self, inst, val): self.rot_left.origin = inst.center
+    def _update_rot_right(self, inst, val): self.rot_right.origin = inst.center
+
     def setup_circular_filters(self):
-        # Restored to center_x: 0.88 as per your working script
         configs = [
-            ('fuji', {'center_x': 0.73, 'center_y': 0.79}),
-            ## ('bw', {'center_x': 0.88, 'center_y': 0.55}),
+            ('fuji', {'center_x': 0.74, 'center_y': 0.80}),
             ('sepia', {'center_x': 0.74, 'center_y': 0.50})
         ]
         self.filter_btns = []
         for mode, pos in configs:
-            btn = Button(size_hint=(None, None), size=(300, 300), pos_hint=pos,
+            btn = Button(size_hint=(None, None), size=(353, 300), pos_hint=pos,
                          background_normal='', background_color=(0,0,0,0))
             with btn.canvas.before:
                 Color(1, 1, 0, 0.5)
@@ -119,8 +142,7 @@ class PhotoBoothApp(App):
             self.filter_layer.add_widget(btn)
             self.filter_btns.append(btn)
 
-        # Print Button (Restored to center_x: 0.88)
-        self.btn_print = Button(size_hint=(0.31, 0.18), pos_hint={'center_x': 0.73, 'center_y': 0.18},
+        self.btn_print = Button(size_hint=(0.31, 0.21), pos_hint={'center_x': 0.73, 'center_y': 0.19},
                                 background_normal='', background_color=(1, 1, 0, 0.5))
         self.btn_print.bind(on_press=self.initiate_print_flow)
         self.filter_layer.add_widget(self.btn_print)
@@ -132,10 +154,10 @@ class PhotoBoothApp(App):
     def start_session(self, instance):
         if self.welcome_layer in self.root.children:
             self.root.remove_widget(self.welcome_layer)
-        
         self.bg_manager.source = "" 
         self.img_widget.opacity = 1
-        self.collage_widget.opacity = 0
+        self.collage_left.opacity = 0
+        self.collage_right.opacity = 0
         self.is_running = True
         self.photo_count = 0
         self.raw_photos = []
@@ -163,7 +185,9 @@ class PhotoBoothApp(App):
     def capture_photo(self):
         self.flash_color.a = 1
         frame = self.picam2.capture_array()
-        img = Image.fromarray(frame); b, g, r, a = img.split()
+        img = Image.fromarray(frame)
+        img = ImageOps.mirror(img) #flips horizontally
+        b, g, r, a = img.split()
         self.raw_photos.append(Image.merge("RGB", (r, g, b)))
         Clock.schedule_once(lambda dt: setattr(self.flash_color, 'a', 0), 0.1)
         self.photo_count += 1
@@ -181,26 +205,35 @@ class PhotoBoothApp(App):
 
     def process_background(self, mode):
         strip_w, strip_h, photo_h = 600, 1800, 450
-        strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
+        
+        # 1. Generate single strip
+        single_strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
         for i, img in enumerate(self.raw_photos):
             work = img.copy()
-            if mode == "bw": 
-                work = ImageOps.grayscale(work).convert("RGB")
+            if mode == "bw": work = ImageOps.grayscale(work).convert("RGB")
             elif mode == "sepia":
-                sepia = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
-                work = Image.fromarray(np.clip(np.array(work).dot(sepia.T), 0, 255).astype(np.uint8))
+                sepia_matrix = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
+                work = Image.fromarray(np.clip(np.array(work).dot(sepia_matrix.T), 0, 255).astype(np.uint8))
             res = ImageOps.fit(work, (strip_w, photo_h), Image.Resampling.LANCZOS)
-            strip.paste(res, (0, i * photo_h))
-        self.current_strip = strip
-        strip.save("temp_preview.jpg")
+            single_strip.paste(res, (0, i * photo_h))
+        
+        self.current_strip = single_strip 
+        single_strip.save("temp_preview.png")
         Clock.schedule_once(self.display_filter_results, 0)
 
     def display_filter_results(self, dt):
         self.bg_manager.source = os.path.join(self.asset_path, 'filter.png')
         self.img_widget.opacity = 0
-        self.collage_widget.source = "temp_preview.jpg"
-        self.collage_widget.reload()
-        self.collage_widget.opacity = 1
+        
+        # Load the same file into both separate widgets
+        self.collage_left.source = "temp_preview.png"
+        self.collage_left.reload()
+        self.collage_left.opacity = 1
+        
+        self.collage_right.source = "temp_preview.png"
+        self.collage_right.reload()
+        self.collage_right.opacity = 1
+        
         self.status_label.text = ""
         self.filter_layer.opacity, self.filter_layer.disabled = 1, False
         for b in self.filter_btns: b.disabled = False
@@ -208,7 +241,8 @@ class PhotoBoothApp(App):
     def initiate_print_flow(self, instance):
         self.bg_manager.source = os.path.join(self.asset_path, 'thankyou.png')
         self.filter_layer.opacity, self.filter_layer.disabled = 0, True
-        self.collage_widget.opacity = 0
+        self.collage_left.opacity = 0
+        self.collage_right.opacity = 0
         
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         canvas.paste(self.current_strip, (0, 0)); canvas.paste(self.current_strip, (600, 0))
@@ -220,18 +254,18 @@ class PhotoBoothApp(App):
         if self.welcome_layer not in self.root.children:
             self.root.add_widget(self.welcome_layer)
         self.bg_manager.source = os.path.join(self.asset_path, 'welcome.png')
-        self.img_widget.source = ""
-        self.img_widget.opacity = 0
-        self.collage_widget.source = ""
-        self.collage_widget.opacity = 0
-        self.is_running = False
+        self.img_widget.source, self.img_widget.opacity, self.is_running = "", 0, False
+        self.collage_left.opacity = 0
+        self.collage_right.opacity = 0
 
     def update_loop(self, dt):
         if self.is_running and self.picam2:
             frame = self.picam2.capture_array()
             texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='rgba')
             texture.blit_buffer(frame.tobytes(), colorfmt='bgra', bufferfmt='ubyte')
-            texture.flip_vertical(); self.img_widget.texture = texture
+            texture.flip_vertical()
+            #texture.flip_horizontal()
+            self.img_widget.texture = texture
 
     def on_keyboard(self, w, k, s, c, m):
         if k == 27: self.safe_exit(); return True
