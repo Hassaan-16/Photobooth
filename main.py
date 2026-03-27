@@ -1,4 +1,5 @@
 import time
+import datetime
 import os
 import sys
 import threading
@@ -259,34 +260,38 @@ class PhotoBoothApp(App):
         for b in self.filter_btns: b.disabled = False
 
     def initiate_print_flow(self, instance):
+        # 1. Create the unique filename first
+        filename = f"print_{int(time.time())}.jpg"
+        
+        # 2. Update the report with this filename
+        self.generate_report(filename)
+
+        # 3. Update UI
         self.bg_manager.source = os.path.join(self.asset_path, 'thankyou.png')
         self.filter_layer.opacity, self.filter_layer.disabled = 0, True
         self.collage_left.opacity = 0
         self.collage_right.opacity = 0
         
         # --- FINAL PRINT LAYOUT SETTINGS ---
-        strip_w = 564  # Matches your process_background setting
-        gap_px = 71    # Approx 6mm at 300 DPI
+        strip_w = 564  
+        gap_px = 71    
         
-        # Create 4x6 canvas (1200x1800 pixels)
+        # Create 4x6 canvas
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         
-        # Paste first strip at the left edge
+        # Paste strips
         canvas.paste(self.current_strip, (0, 0))
-        
-        # Paste second strip after the first strip + 6mm gap
-        # 564 + 71 = 635
         canvas.paste(self.current_strip, (strip_w + gap_px, 0))
         
-        # Save the final file to gallery
-        save_file = os.path.join(self.save_path, f"print_{int(time.time())}.jpg")
+        # 4. Save using the SAME filename variable from step 1
+        save_file = os.path.join(self.save_path, filename)
         canvas.save(save_file, quality=95)
         
-        # To print to the actual printer, uncomment the lines below:
+        # Optional: Printer command (uncomment if needed)
         # temp_print = "/tmp/to_printer.jpg"
         # canvas.save(temp_print)
         # subprocess.run(["lp", "-d", "EPSON_L3250_Series", "-o", "PageSize=4X6FULL", "-o", "StpBorderless=True", temp_print])
-        
+
         Clock.schedule_once(self.reset_to_start, 30.0)
 
     def reset_to_start(self, dt):
@@ -305,6 +310,39 @@ class PhotoBoothApp(App):
             texture.flip_vertical()
             #texture.flip_horizontal()
             self.img_widget.texture = texture
+
+    def generate_report(self, saved_filename):
+        import datetime
+        now = datetime.datetime.now()
+        month_str = now.strftime("%b-%y").upper() # JAN-26
+        day_str = now.strftime("%d-%m-%y")
+        timestamp = now.strftime("%H:%M:%S")
+        
+        reports_dir = os.path.join(os.path.dirname(__file__), "reports")
+        month_dir = os.path.join(reports_dir, month_str)
+        if not os.path.exists(month_dir): os.makedirs(month_dir)
+        
+        file_path = os.path.join(month_dir, f"{day_str}.txt")
+        
+        current_count = 0
+        existing_logs = []
+
+        # Read current status
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                lines = f.readlines()
+                if lines:
+                    try:
+                        # Extract number from "pictures taken: 10"
+                        current_count = int(lines[0].split(":")[1].strip())
+                        existing_logs = lines[1:] # Save the old list of filenames
+                    except: pass
+
+        # Write updated status
+        with open(file_path, "w") as f:
+            f.write(f"pictures taken: {current_count + 1}\n") # Increment by 1 session
+            f.writelines(existing_logs) # Put back old list
+            f.write(f"[{timestamp}] {saved_filename}\n") # Add new filename
 
     def on_keyboard(self, w, k, s, c, m):
         if k == 27: self.safe_exit(); return True
