@@ -5,7 +5,7 @@ import sys
 import threading
 import subprocess
 import numpy as np
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw
 
 # 1. Kivy System Configuration
 from kivy.config import Config
@@ -15,18 +15,26 @@ Config.set('graphics', 'fullscreen', 'auto')
 Config.set('graphics', 'show_cursor', '1') 
 
 from kivy.app import App
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.uix.image import Image as KivyImage
 from kivy.clock import Clock
-from kivy.graphics.texture import Texture
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.image import Image as KivyImage
 from kivy.graphics import Color, Rectangle, Ellipse, PushMatrix, PopMatrix, Rotate
+from kivy.graphics.texture import Texture
 from kivy.core.window import Window
 
 from picamera2 import Picamera2
 
 class PhotoBoothApp(App):
+
+    # --- GLOBAL ADJUSTABLE SETTINGS ---
+    ROW_GAP = 15      # Change this to 0, 10, 20 etc. (in pixels)
+    CORNER_RADIUS = 40 # Change this to round corners more or less
+    STRIP_W = 564     # Your fixed width to fit the 6mm center gap
+    STRIP_H = 1800    # Total strip height
+    # ----------------------------------
+
     def build(self):
         Window.clearcolor = (0, 0, 0, 1) 
         Window.bind(on_keyboard=self.on_keyboard)
@@ -86,6 +94,28 @@ class PhotoBoothApp(App):
         self.root.add_widget(self.collage_left)
         self.root.add_widget(self.collage_right)
 
+        # Load Paper overlay Inside build()
+        try:
+            # 1. Load and prepare the image as before
+            overlay_raw = Image.open(os.path.join(self.asset_path, 'paper_overlay0.png')).convert("RGBA")
+            overlay_resised = overlay_raw.rotate(90, expand=True).resize((1200, 1800), Image.Resampling.LANCZOS)
+
+            # 2. ADJUST TRANSPARENCY
+            # (0.1 is very faint, 1.0 is solid)
+            opacity_level = 0.4 
+
+            # separates the image into R, G, B, and A channels
+            r, g, b, a = overlay_resised.split()
+
+            # multiplies the Alpha channel by opacity level
+            a = a.point(lambda p: int(p * opacity_level))
+
+            # Merge them back together
+            self.paper_overlay = Image.merge("RGBA", (r, g, b, a))
+        except Exception as e:
+            print(f"Overlay Load Error: {e}")
+            self.paper_overlay = None
+
         # 3. Filter Sidebar
         self.filter_layer = FloatLayout(size_hint=(1, 1), opacity=0, disabled=True)
         self.setup_circular_filters()
@@ -133,6 +163,7 @@ class PhotoBoothApp(App):
             ('fuji', {'center_x': 0.74, 'center_y': 0.80}),
             ('sepia', {'center_x': 0.74, 'center_y': 0.50})
         ]
+        # adjust filter buttons here :
         self.filter_btns = []
         for mode, pos in configs:
             btn = Button(size_hint=(None, None), size=(353, 300), pos_hint=pos,
@@ -189,7 +220,7 @@ class PhotoBoothApp(App):
         self.flash_color.a = 1
         frame = self.picam2.capture_array()
         img = Image.fromarray(frame)
-        img = ImageOps.mirror(img) #flips horizontally
+        img = ImageOps.mirror(img) # flips horizontally here :
         b, g, r, a = img.split()
         self.raw_photos.append(Image.merge("RGB", (r, g, b)))
         Clock.schedule_once(lambda dt: setattr(self.flash_color, 'a', 0), 0.1)
@@ -203,14 +234,15 @@ class PhotoBoothApp(App):
         threading.Thread(target=self.process_background, args=("fuji",)).start()
 
     def launch_filter_thread(self, mode):
+        
         # 1. Check if the filter is already the active one
         if mode == self.active_filter:
             self.status_label.text = "APPLIED!"
-            # Just clear the message after 1 second, no processing needed
+            # clear the message after 1 second, no processing needed
             Clock.schedule_once(self.clear_status_message, 1.0)
             return
 
-        # 2. If it's a NEW filter, proceed with processing as usual
+        # 2. If NEW filter, proceed with processing as usual
         for b in self.filter_btns: 
             b.disabled = True
             
@@ -222,28 +254,91 @@ class PhotoBoothApp(App):
     def clear_status_message(self, dt):
         self.status_label.text = ""
 
-    def process_background(self, mode):
-        strip_w, strip_h, photo_h = 564, 1800, 450 
-        # 564 instead of 600 here 
-        # accomodates the white strip in between
+
+    def process_background(self, mode):        
+
+        # 1. DYNAMIC MATH: Calculate photo height based on the global gap
+        # (Total Height - 3 gaps) / 4 photos
+        photo_h = int((self.STRIP_H - (3 * self.ROW_GAP)) / 4)
+        photo_size = (self.STRIP_W, photo_h)
+
+        # 2. CREATE THE ROUNDED MASK (Stencil)
+        round_mask = Image.new('L', photo_size, 0)
+        draw = ImageDraw.Draw(round_mask)
+        draw.rounded_rectangle((0, 0) + photo_size, radius=self.CORNER_RADIUS, fill=255)
+
+        # 3. Create the blank white strip
+        single_strip = Image.new('RGB', (self.STRIP_W, self.STRIP_H), (255, 255, 255))
         
-        # 1. Generate single strip
-        single_strip = Image.new('RGB', (strip_w, strip_h), (255, 255, 255))
         for i, img in enumerate(self.raw_photos):
             work = img.copy()
-            if mode == "bw": work = ImageOps.grayscale(work).convert("RGB")
+            
+            # --- FILTERS ---
+            if mode == "bw": 
+                work = ImageOps.grayscale(work).convert("RGB")
+            
             elif mode == "sepia":
+                # 1. Apply your original Sepia Matrix
                 sepia_matrix = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
                 work = Image.fromarray(np.clip(np.array(work).dot(sepia_matrix.T), 0, 255).astype(np.uint8))
-            res = ImageOps.fit(work, (strip_w, photo_h), Image.Resampling.LANCZOS)
-            single_strip.paste(res, (0, i * photo_h))
+
+                # 2. Add Slight Vignette                
+                # Create a black transparent overlay the size of the photo
+                vignette = Image.new('RGBA', work.size, (0, 0, 0, 0))
+                draw = ImageDraw.Draw(vignette)
+                
+                # Draw a soft black oval that fades toward the edges                
+                width, height = work.size
+                draw.ellipse([-width*0.2, -height*0.2, width*1.2, height*1.2], fill=(0, 0, 0, 100))
+                
+                # Blur the oval heavily to make it a smooth "gradient" vignette
+                vignette = vignette.filter(ImageFilter.GaussianBlur(radius=40))
+                
+                # Blend the vignette onto the sepia image
+                work.paste(vignette, (0, 0), vignette)
+
+            elif mode == "fuji":
+                
+                # Golden Fuji Matrix
+                golden_fuji_matrix = (
+                    1.1, 0.1, 0.0, 0,
+                    0.0, 1.15, 0.0, 0,
+                    0.0, 0.0, 0.9, 0
+                )
+                work = work.convert("RGB", golden_fuji_matrix)
+
+                # Bloom
+                bloom = work.filter(ImageFilter.GaussianBlur(radius=10))
+                work = Image.blend(work, bloom, alpha=0.3)
+
+                # Shadow Lift (Numpy)
+                arr = np.array(work).astype(np.float32)
+                arr = np.clip(arr * 0.9 + 20, 0, 255).astype(np.uint8)
+                work = Image.fromarray(arr)
+
+                # Contrast & Grain
+                work = ImageEnhance.Contrast(work).enhance(0.95)
+                noise = np.random.normal(loc=0, scale=5, size=arr.shape)
+                arr = np.clip(np.array(work).astype(np.float32) + noise, 0, 255).astype(np.uint8)
+                work = Image.fromarray(arr)
+            # --- END  FILTERS ---
+
+            # 4. Resize and Paste with Rounded Corners
+            res = ImageOps.fit(work, photo_size, Image.Resampling.LANCZOS)
+            
+            # Calculate Y position using the ROW_GAP
+            y_pos = i * (photo_h + self.ROW_GAP)
+            
+            # Paste using the mask
+            single_strip.paste(res, (0, y_pos), round_mask)
         
         self.current_strip = single_strip 
         single_strip.save("temp_preview.png")
         Clock.schedule_once(self.display_filter_results, 0)
 
     def display_filter_results(self, dt):
-        self.bg_manager.source = os.path.join(self.asset_path, 'filter.png')
+        
+        self.bg_manager.source = os.path.join(self.asset_path, 'filter.png')        
         self.img_widget.opacity = 0
         
         # Load the same file into both separate widgets
@@ -260,6 +355,7 @@ class PhotoBoothApp(App):
         for b in self.filter_btns: b.disabled = False
 
     def initiate_print_flow(self, instance):
+        
         # 1. Create the unique filename first
         filename = f"print_{int(time.time())}.jpg"
         
@@ -275,7 +371,7 @@ class PhotoBoothApp(App):
         # --- FINAL PRINT LAYOUT SETTINGS ---
         strip_w = 564  
         gap_px = 71    
-        
+        #
         # Create 4x6 canvas
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         
@@ -283,14 +379,20 @@ class PhotoBoothApp(App):
         canvas.paste(self.current_strip, (0, 0))
         canvas.paste(self.current_strip, (strip_w + gap_px, 0))
         
+        # --- APPLY PRE-LOADED OVERLAY ---
+        if self.paper_overlay:
+            # Pasting using itself as the mask handles the transparency
+            canvas.paste(self.paper_overlay, (0, 0), self.paper_overlay)
+        # --------------------------------
+
         # 4. Save using the SAME filename variable from step 1
         save_file = os.path.join(self.save_path, filename)
         canvas.save(save_file, quality=95)
         
-        # Optional: Printer command (uncomment if needed)
-        # temp_print = "/tmp/to_printer.jpg"
-        # canvas.save(temp_print)
-        # subprocess.run(["lp", "-d", "EPSON_L3250_Series", "-o", "PageSize=4X6FULL", "-o", "StpBorderless=True", temp_print])
+        # Optional: Printer command (uncomment when needed)
+        temp_print = "/tmp/to_printer.jpg"
+        canvas.save(temp_print)
+        subprocess.run(["lp", "-d", "EPSON_L3250_Series", "-o", "PageSize=4X6FULL", "-o", "StpBorderless=True", temp_print])
 
         Clock.schedule_once(self.reset_to_start, 30.0)
 
@@ -312,9 +414,9 @@ class PhotoBoothApp(App):
             self.img_widget.texture = texture
 
     def generate_report(self, saved_filename):
-        import datetime
+
         now = datetime.datetime.now()
-        month_str = now.strftime("%b-%y").upper() # JAN-26
+        month_str = now.strftime("%b-%y").upper()
         day_str = now.strftime("%d-%m-%y")
         timestamp = now.strftime("%H:%M:%S")
         
