@@ -30,7 +30,7 @@ class PhotoBoothApp(App):
 
     # --- GLOBAL ADJUSTABLE SETTINGS ---
     ROW_GAP = 15      # Change this to 0, 10, 20 etc. (in pixels)
-    CORNER_RADIUS = 40 # Change this to round corners more or less
+    CORNER_RADIUS = 10 # Change this to round corners more or less
     STRIP_W = 564     # Your fixed width to fit the 6mm center gap
     STRIP_H = 1800    # Total strip height
     # ----------------------------------
@@ -102,7 +102,7 @@ class PhotoBoothApp(App):
 
             # 2. ADJUST TRANSPARENCY
             # (0.1 is very faint, 1.0 is solid)
-            opacity_level = 0.4 
+            opacity_level = 0.9 
 
             # separates the image into R, G, B, and A channels
             r, g, b, a = overlay_resised.split()
@@ -135,7 +135,7 @@ class PhotoBoothApp(App):
         self.welcome_layer = FloatLayout(size_hint=(1, 1))
         self.btn_start = Button(size_hint=(0.40, 0.21), 
                                 pos_hint={'center_x': 0.5, 'center_y': 0.26},
-                                background_normal='', background_color=(1, 1, 0, 0.5))
+                                background_normal='', background_color=(0, 0, 0, 0))
         self.btn_start.bind(on_press=self.start_session)
         self.welcome_layer.add_widget(self.btn_start)
         self.root.add_widget(self.welcome_layer)
@@ -159,33 +159,69 @@ class PhotoBoothApp(App):
     def _update_rot_right(self, inst, val): self.rot_right.origin = inst.center
 
     def setup_circular_filters(self):
+        # 1. Configuration for Filter Buttons
+        # These are the invisible touch areas over your Canva 'filter' background
         configs = [
             ('fuji', {'center_x': 0.74, 'center_y': 0.80}),
             ('sepia', {'center_x': 0.74, 'center_y': 0.50})
         ]
-        # adjust filter buttons here :
+        
         self.filter_btns = []
+
+        # 2. Create Filter Selection Buttons (Circular)
         for mode, pos in configs:
             btn = Button(size_hint=(None, None), size=(353, 300), pos_hint=pos,
-                         background_normal='', background_color=(0,0,0,0))
+                         background_normal='', background_color=(0, 0, 0, 0))
+            
             with btn.canvas.before:
-                Color(1, 1, 0, 0.5)
+                Color(0, 0, 0, 0) # Keep transparent to show Canva BG
                 btn.shape = Ellipse(size=btn.size, pos=btn.pos)
+
             btn.bind(pos=self._update_shape, size=self._update_shape)
             btn.bind(on_press=lambda x, m=mode: self.launch_filter_thread(m))
+            
             self.filter_layer.add_widget(btn)
             self.filter_btns.append(btn)
 
-        self.btn_print = Button(size_hint=(0.31, 0.21), pos_hint={'center_x': 0.73, 'center_y': 0.19},
-                                background_normal='', background_color=(1, 1, 0, 0.5))
+        # 3. PRINT BUTTON (Invisible Rectangle over 'Print' area in Canva)
+        self.btn_print = Button(size_hint=(0.31, 0.21), 
+                                pos_hint={'center_x': 0.73, 'center_y': 0.19},
+                                background_normal='', background_color=(0, 0, 0, 0))
         self.btn_print.bind(on_press=self.initiate_print_flow)
         self.filter_layer.add_widget(self.btn_print)
         self.filter_btns.append(self.btn_print)
+
+        # 4. RETAKE BUTTON (The 'X' in the Top-Left)
+        # Using a square size_hint to keep the circle from looking like an oval
+        self.btn_retake = Button(text='X', 
+                                 font_size='65sp',
+                                 bold=True,
+                                 color=(1, 1, 1, 1), # White 'X'
+                                 size_hint=(0.08, 0.15),
+                                 pos_hint={'center_x': 0.05, 'center_y': 0.89}, 
+                                 background_normal='', 
+                                 background_color=(0, 0, 0, 0)) # Button base transparent
+        
+        # Add a visible Red Circle behind the 'X'
+        with self.btn_retake.canvas.before:
+            Color(0.8, 0.2, 0.2, 0.7) # Semi-transparent Red
+            self.btn_retake.shape = Ellipse(size=self.btn_retake.size, pos=self.btn_retake.pos)
+        
+        self.btn_retake.bind(pos=self._update_shape, size=self._update_shape)
+        self.btn_retake.bind(on_press=self.start_session)
+        
+        self.filter_layer.add_widget(self.btn_retake)
+        self.filter_btns.append(self.btn_retake)    
 
     def _update_shape(self, inst, val):
         inst.shape.pos, inst.shape.size = inst.pos, inst.size
 
     def start_session(self, instance):
+        # 1. HIDE the filter layer and disable the buttons
+        self.filter_layer.opacity = 0
+        self.filter_layer.disabled = True
+        
+        # 2. Reset everything else
         if self.welcome_layer in self.root.children:
             self.root.remove_widget(self.welcome_layer)
         self.bg_manager.source = "" 
@@ -277,8 +313,21 @@ class PhotoBoothApp(App):
             if mode == "bw": 
                 work = ImageOps.grayscale(work).convert("RGB")
             
+            elif mode == "fuji":
+
+                # Vintage Gold Look!
+                vintage_matrix = (
+                    1.5, 0.0, 0.0, 0, # Red (Strong boost)
+                    0.0, 1.1, 0.0, 0, # Green (Natural)
+                    -0.1, -0.1, 0.7, 0 # Blue (Muted for that yellow/warm look)
+                )
+                work = work.convert("RGB", vintage_matrix)
+                # Boost brightness slightly to mimic overexposed film
+                work = ImageEnhance.Brightness(work).enhance(1.1)
+
             elif mode == "sepia":
-                # 1. Apply your original Sepia Matrix
+
+                # sepia
                 sepia_matrix = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
                 work = Image.fromarray(np.clip(np.array(work).dot(sepia_matrix.T), 0, 255).astype(np.uint8))
 
@@ -297,30 +346,7 @@ class PhotoBoothApp(App):
                 # Blend the vignette onto the sepia image
                 work.paste(vignette, (0, 0), vignette)
 
-            elif mode == "fuji":
-                
-                # Golden Fuji Matrix
-                golden_fuji_matrix = (
-                    1.1, 0.1, 0.0, 0,
-                    0.0, 1.15, 0.0, 0,
-                    0.0, 0.0, 0.9, 0
-                )
-                work = work.convert("RGB", golden_fuji_matrix)
 
-                # Bloom
-                bloom = work.filter(ImageFilter.GaussianBlur(radius=10))
-                work = Image.blend(work, bloom, alpha=0.3)
-
-                # Shadow Lift (Numpy)
-                arr = np.array(work).astype(np.float32)
-                arr = np.clip(arr * 0.9 + 20, 0, 255).astype(np.uint8)
-                work = Image.fromarray(arr)
-
-                # Contrast & Grain
-                work = ImageEnhance.Contrast(work).enhance(0.95)
-                noise = np.random.normal(loc=0, scale=5, size=arr.shape)
-                arr = np.clip(np.array(work).astype(np.float32) + noise, 0, 255).astype(np.uint8)
-                work = Image.fromarray(arr)
             # --- END  FILTERS ---
 
             # 4. Resize and Paste with Rounded Corners
@@ -355,45 +381,74 @@ class PhotoBoothApp(App):
         for b in self.filter_btns: b.disabled = False
 
     def initiate_print_flow(self, instance):
+        # 1. Prepare Filenames and Paths
+        timestamp = int(time.time())
+        filename = f"print_{timestamp}.jpg"
+        temp_print_path = "/tmp/booth_print.jpg"
         
-        # 1. Create the unique filename first
-        filename = f"print_{int(time.time())}.jpg"
-        
-        # 2. Update the report with this filename
+        # 2. Update the Text Report (Internal logging)
         self.generate_report(filename)
 
-        # 3. Update UI
+        # 3. Update UI to Thank You Screen
         self.bg_manager.source = os.path.join(self.asset_path, 'thankyou.png')
         self.filter_layer.opacity, self.filter_layer.disabled = 0, True
         self.collage_left.opacity = 0
         self.collage_right.opacity = 0
         
-        # --- FINAL PRINT LAYOUT SETTINGS ---
+        # 4. Create the 4x6 Canvas (1200x1800 pixels)
         strip_w = 564  
         gap_px = 71    
-        #
-        # Create 4x6 canvas
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         
-        # Paste strips
+        # Paste the two strips side-by-side
         canvas.paste(self.current_strip, (0, 0))
         canvas.paste(self.current_strip, (strip_w + gap_px, 0))
         
-        # --- APPLY PRE-LOADED OVERLAY ---
+        # Apply the paper overlay if it exists
         if self.paper_overlay:
-            # Pasting using itself as the mask handles the transparency
             canvas.paste(self.paper_overlay, (0, 0), self.paper_overlay)
-        # --------------------------------
 
-        # 4. Save using the SAME filename variable from step 1
-        save_file = os.path.join(self.save_path, filename)
-        canvas.save(save_file, quality=95)
-        
-        # Optional: Printer command (uncomment when needed)
-        temp_print = "/tmp/to_printer.jpg"
-        canvas.save(temp_print)
-        subprocess.run(["lp", "-d", "EPSON_L3250_Series", "-o", "PageSize=4X6FULL", "-o", "StpBorderless=True", temp_print])
+        # 5. SAVE TO GALLERY (Permanent Storage)
+        try:
+            # Ensure save_path exists (defined in build())
+            save_file = os.path.join(self.save_path, filename)
+            canvas.save(save_file, "JPEG", quality=95)
+            print(f"Gallery image saved: {save_file}")
+        except Exception as e:
+            print(f"Gallery Save Error: {e}")
 
+        # 6. SAVE TO TEMP AND PRINT (L3250 Official Driver Logic)
+        try:
+            # Save the temporary file for the printer
+            canvas.save(temp_print_path, "JPEG", quality=100)
+
+            # Clear any stuck 'zoomed' jobs from the buffer
+            subprocess.run(["cancel", "-a"])
+
+            # THE L3250 COMMAND:
+            # We use 'scaling=100' and 'media=4x6.fullbleed' to fix the 2.25 rows issue
+            print_cmd = [
+                "lp", 
+                "-d", "EPSON_L3250_Series", 
+                "-o", "media=4x6.fullbleed",      # Hardware-level borderless
+                "-o", "page-left=0", "-o", "page-right=0",
+                "-o", "page-top=0", "-o", "page-bottom=0",
+                "-o", "scaling=100",               # Force 1:1 scale (No zooming)
+                "-o", "print-quality=4",           # High quality for L3250
+                temp_print_path
+                #"lp", "-d", printer_name, 
+                # "-o", "PageSize=4X6FULL", 
+                # "-o", "StpBorderless=True", 
+                # temp_print
+            ]
+            
+            subprocess.run(print_cmd, check=True)
+            print("Print job sent successfully to L3250.")
+
+        except Exception as e:
+            print(f"Print error: {e}")
+
+        # 7. Return to welcome screen after 30 seconds
         Clock.schedule_once(self.reset_to_start, 30.0)
 
     def reset_to_start(self, dt):
