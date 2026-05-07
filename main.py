@@ -407,8 +407,8 @@ class PhotoBoothApp(App):
         self.collage_right.opacity = 0
         
         # 4. Create the 4x6 Canvas (1200x1800 pixels)
-        strip_w = 564  
-        gap_px = 71    
+        strip_w = 600 # 564  
+        gap_px = 0 # 71    
         canvas = Image.new('RGB', (1200, 1800), (255, 255, 255))
         
         # Paste the two strips side-by-side
