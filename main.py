@@ -29,9 +29,9 @@ from picamera2 import Picamera2
 class PhotoBoothApp(App):
 
     # --- GLOBAL ADJUSTABLE SETTINGS ---
-    ROW_GAP = 15      # Change this to 0, 10, 20 etc. (in pixels)
-    CORNER_RADIUS = 10 # Change this to round corners more or less
-    STRIP_W = 564     # Your fixed width to fit the 6mm center gap
+    ROW_GAP = 0 # 15      # Change this to 0, 10, 20 etc. (in pixels)
+    CORNER_RADIUS = 0 # 10 # Change this to round corners more or less
+    STRIP_W = 600 # 564     # Your fixed width to fit the 6mm center gap
     STRIP_H = 1800    # Total strip height
     # ----------------------------------
 
@@ -94,7 +94,8 @@ class PhotoBoothApp(App):
         self.root.add_widget(self.collage_left)
         self.root.add_widget(self.collage_right)
 
-        # Load Paper overlay Inside build()
+        # Load Paper overlay Inside build()         ### OVERLAY ###
+
         try:
             # 1. Load and prepare the image as before
             overlay_raw = Image.open(os.path.join(self.asset_path, 'paper_overlay0.png')).convert("RGBA")
@@ -102,7 +103,7 @@ class PhotoBoothApp(App):
 
             # 2. ADJUST TRANSPARENCY
             # (0.1 is very faint, 1.0 is solid)
-            opacity_level = 0.9 
+            opacity_level = 0.1
 
             # separates the image into R, G, B, and A channels
             r, g, b, a = overlay_resised.split()
@@ -314,16 +315,26 @@ class PhotoBoothApp(App):
                 work = ImageOps.grayscale(work).convert("RGB")
             
             elif mode == "fuji":
-
-                # Vintage Gold Look!
-                vintage_matrix = (
-                    1.5, 0.0, 0.0, 0, # Red (Strong boost)
-                    0.0, 1.1, 0.0, 0, # Green (Natural)
-                    -0.1, -0.1, 0.7, 0 # Blue (Muted for that yellow/warm look)
+                # 1. Pink Tint Matrix: 
+                # Red is boosted (1.2) and Green is slightly lowered (0.9)
+                # This creates a subtle pink hue while keeping Blue neutral
+                pink_tint_matrix = (
+                    1.2,  0.0, 0.0, 0,    # Red Channel (Boosted)
+                    0.0,  0.9, 0.0, 0,    # Green Channel (Lowered for pink shift)
+                    0.0,  0.0, 1.0, 0     # Blue Channel (Neutral)
                 )
-                work = work.convert("RGB", vintage_matrix)
-                # Boost brightness slightly to mimic overexposed film
+                work = work.convert("RGB", pink_tint_matrix)
+                
+                # 2. Softer Tone: Matte, airy feel
                 work = ImageEnhance.Brightness(work).enhance(1.1)
+                work = ImageEnhance.Contrast(work).enhance(0.8) 
+                
+                # 3. Soft Glow: Misty bloom effect
+                bloom = work.filter(ImageFilter.GaussianBlur(radius=10))
+                work = Image.blend(work, bloom, alpha=0.25) 
+                
+                # 4. Final Color: Keep saturation at 1.0 so the pink doesn't wash out
+                work = ImageEnhance.Color(work).enhance(1.0)
 
             elif mode == "sepia":
 
@@ -422,24 +433,27 @@ class PhotoBoothApp(App):
             # Save the temporary file for the printer
             canvas.save(temp_print_path, "JPEG", quality=100)
 
-            # Clear any stuck 'zoomed' jobs from the buffer
-            subprocess.run(["cancel", "-a"])
+            # Clear any stuck 'zoomed' jobs from the buffer to prevent hardware errors
+            
+            # subprocess.run(["cancel", "-a"]) # use only once
 
             # THE L3250 COMMAND:
-            # We use 'scaling=100' and 'media=4x6.fullbleed' to fix the 2.25 rows issue
+            # We use 'scaling=100' to ensure the 1200x1800 canvas fits the paper perfectly.
             print_cmd = [
+                # "lp", 
+                # "-d", "EPSON_L3250_Series", 
+                # "-o", "PageSize=4X6FULL", 
+                # "-o", "StpBorderless=True",      
+                # "-o", "scaling=100",  # Keeps the print at 1:1 scale
+                # "-o", "print-quality=4", # High quality photo mode
                 "lp", 
                 "-d", "EPSON_L3250_Series", 
                 "-o", "media=4x6.fullbleed",      # Hardware-level borderless
                 "-o", "page-left=0", "-o", "page-right=0",
                 "-o", "page-top=0", "-o", "page-bottom=0",
                 "-o", "scaling=100",               # Force 1:1 scale (No zooming)
-                "-o", "print-quality=4",           # High quality for L3250
+                "-o", "print-quality=4",
                 temp_print_path
-                #"lp", "-d", printer_name, 
-                # "-o", "PageSize=4X6FULL", 
-                # "-o", "StpBorderless=True", 
-                # temp_print
             ]
             
             subprocess.run(print_cmd, check=True)
