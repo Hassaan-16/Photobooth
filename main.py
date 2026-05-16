@@ -31,12 +31,12 @@ class PhotoBoothApp(App):
     # --- GLOBAL ADJUSTABLE SETTINGS ---
     ROW_GAP = 15 # 15      # Change this to 0, 10, 20 etc. (in pixels)
     CORNER_RADIUS = 10 # 10 # Change this to round corners more or less
-    STRIP_W = 564 #600 # 564     # Your fixed width to fit the 6mm center gap
+    STRIP_W = 600 # 564     # Your fixed width to fit the 6mm center gap
     STRIP_H = 1800    # Total strip height
     
-    # NEW BORDER & GAP CONTROLS (In Millimeters)
-    OUTER_BORDER_MM = 1.0   # 1mm black border all around the 4x6 print
-    STRIP_GAP_MM = 2.0      # 2mm black gap between the two strips
+    # BORDER & GAP CONTROLS (In Millimeters)
+    OUTER_BORDER_MM = 1.0   # 1mm border all around the 4x6 print
+    STRIP_GAP_MM = 2.0      # 2mm gap between the two strips
     DPI = 300               # Standard print DPI for 4x6 (1200x1800 px)
     # ----------------------------------
 
@@ -99,24 +99,13 @@ class PhotoBoothApp(App):
         self.root.add_widget(self.collage_left)
         self.root.add_widget(self.collage_right)
 
-        # Load Paper overlay Inside build()         ### OVERLAY ###
-
+        # Load Paper overlay Inside build()
         try:
-            # 1. Load and prepare the image as before
             overlay_raw = Image.open(os.path.join(self.asset_path, 'paper_overlay0.png')).convert("RGBA")
             overlay_resised = overlay_raw.rotate(90, expand=True).resize((1200, 1800), Image.Resampling.LANCZOS)
-
-            # 2. ADJUST TRANSPARENCY
-            # (0.1 is very faint, 1.0 is solid)
             opacity_level = 0.1
-
-            # separates the image into R, G, B, and A channels
             r, g, b, a = overlay_resised.split()
-
-            # multiplies the Alpha channel by opacity level
             a = a.point(lambda p: int(p * opacity_level))
-
-            # Merge them back together
             self.paper_overlay = Image.merge("RGBA", (r, g, b, a))
         except Exception as e:
             print(f"Overlay Load Error: {e}")
@@ -154,18 +143,15 @@ class PhotoBoothApp(App):
         self.is_running = False
         self.photo_count = 0
         self.raw_photos = []
-
-        self.active_filter = "fuji" # Fuji is the default starting filter
+        self.active_filter = "fuji"
 
         Clock.schedule_interval(self.update_loop, 1.0 / 30.0)
         return self.root
 
-    # Update Rotation Helpers
     def _update_rot_left(self, inst, val): self.rot_left.origin = inst.center
     def _update_rot_right(self, inst, val): self.rot_right.origin = inst.center
 
     def setup_circular_filters(self):
-        # 1. Configuration for Filter Buttons
         configs = [
             ('fuji', {'center_x': 0.74, 'center_y': 0.80}),
             ('sepia', {'center_x': 0.74, 'center_y': 0.50})
@@ -173,22 +159,18 @@ class PhotoBoothApp(App):
 
         self.filter_btns = []
 
-        # 2. Create Filter Selection Buttons (Circular)
         for mode, pos in configs:
             btn = Button(size_hint=(None, None), size=(353, 300), pos_hint=pos,
                          background_normal='', background_color=(0, 0, 0, 0))
-
             with btn.canvas.before:
-                Color(0, 0, 0, 0) # Keep transparent to show Canva BG
+                Color(0, 0, 0, 0)
                 btn.shape = Ellipse(size=btn.size, pos=btn.pos)
-
             btn.bind(pos=self._update_shape, size=self._update_shape)
             btn.bind(on_press=lambda x, m=mode: self.launch_filter_thread(m))
-
             self.filter_layer.add_widget(btn)
             self.filter_btns.append(btn)
 
-        # 3. PRINT BUTTON (Invisible Rectangle over 'Print' area in Canva)
+        # PRINT BUTTON
         self.btn_print = Button(size_hint=(0.31, 0.21), 
                                 pos_hint={'center_x': 0.73, 'center_y': 0.19},
                                 background_normal='', background_color=(0, 0, 0, 0))
@@ -196,23 +178,15 @@ class PhotoBoothApp(App):
         self.filter_layer.add_widget(self.btn_print)
         self.filter_btns.append(self.btn_print)
 
-        # 4. RETAKE BUTTON (The 'X' in the Top-Left)
-        self.btn_retake = Button(text='X', 
-                                 font_size='65sp',
-                                 bold=True,
-                                 color=(1, 1, 1, 1), 
-                                 size_hint=(0.08, 0.15),
-                                 pos_hint={'center_x': 0.05, 'center_y': 0.89}, 
-                                 background_normal='', 
-                                 background_color=(0, 0, 0, 0))
-
+        # RETAKE BUTTON
+        self.btn_retake = Button(text='X', font_size='65sp', bold=True, color=(1, 1, 1, 1), 
+                                 size_hint=(0.08, 0.15), pos_hint={'center_x': 0.05, 'center_y': 0.89}, 
+                                 background_normal='', background_color=(0, 0, 0, 0))
         with self.btn_retake.canvas.before:
             Color(0.8, 0.2, 0.2, 0.7) 
             self.btn_retake.shape = Ellipse(size=self.btn_retake.size, pos=self.btn_retake.pos)
-
         self.btn_retake.bind(pos=self._update_shape, size=self._update_shape)
         self.btn_retake.bind(on_press=self.start_session)
-
         self.filter_layer.add_widget(self.btn_retake)
         self.filter_btns.append(self.btn_retake)    
 
@@ -222,7 +196,6 @@ class PhotoBoothApp(App):
     def start_session(self, instance):
         self.filter_layer.opacity = 0
         self.filter_layer.disabled = True
-
         if self.welcome_layer in self.root.children:
             self.root.remove_widget(self.welcome_layer)
         self.bg_manager.source = "" 
@@ -275,10 +248,8 @@ class PhotoBoothApp(App):
             self.status_label.text = "APPLIED!"
             Clock.schedule_once(self.clear_status_message, 1.0)
             return
-
         for b in self.filter_btns: 
             b.disabled = True
-
         self.status_label.text = f"Applying {mode}..."
         self.active_filter = mode 
         threading.Thread(target=self.process_background, args=(mode,)).start()
@@ -287,7 +258,6 @@ class PhotoBoothApp(App):
         self.status_label.text = ""
 
     def process_background(self, mode):        
-        # Calculate individual item height based on the gap setup
         photo_h = int((self.STRIP_H - (3 * self.ROW_GAP)) / 4)
         photo_size = (self.STRIP_W, photo_h)
 
@@ -295,8 +265,9 @@ class PhotoBoothApp(App):
         draw = ImageDraw.Draw(round_mask)
         draw.rounded_rectangle((0, 0) + photo_size, radius=self.CORNER_RADIUS, fill=255)
 
-        # Base strip background layout remains white internally for the photo card effect
-        single_strip = Image.new('RGB', (self.STRIP_W, self.STRIP_H), (0, 0, 0))
+        # Dynamic Strip Base Color Definition: White background for Fuji, Black for Sepia/BW
+        strip_bg_color = (255, 255, 255) if mode == "fuji" else (0, 0, 0)
+        single_strip = Image.new('RGB', (self.STRIP_W, self.STRIP_H), strip_bg_color)
 
         for i, img in enumerate(self.raw_photos):
             work = img.copy()
@@ -350,7 +321,6 @@ class PhotoBoothApp(App):
         for b in self.filter_btns: b.disabled = False
 
     def mm_to_px(self, mm):
-        """Helper conversion: mm to pixels based on the target DPI setup."""
         return int(round((mm / 25.4) * self.DPI))
 
     def initiate_print_flow(self, instance):
@@ -365,32 +335,30 @@ class PhotoBoothApp(App):
         self.collage_left.opacity = 0
         self.collage_right.opacity = 0
 
-        # 1. Base Dimensions for a standard 4x6 print canvas
         canvas_w = 1200
         canvas_h = 1800
 
-        # 2. Convert configuration metrics from millimeters to pixels
         border_px = self.mm_to_px(self.OUTER_BORDER_MM)
         gap_px = self.mm_to_px(self.STRIP_GAP_MM)
 
-        # 3. Create Canvas with a SOLID BLACK color background instead of white
-        canvas = Image.new('RGB', (canvas_w, canvas_h), (0, 0, 0))
+        # FLOW SEPARATION LOGIC: If filter is Fuji, print white canvas. Otherwise, black canvas.
+        if self.active_filter == "fuji":
+            canvas_color = (255, 255, 255)
+        else:
+            canvas_color = (0, 0, 0)
 
-        # 4. Math: Calculate precise boundaries for pasting the two strips
-        # Total usable width = Width - (Left Border + Right Border) - Center Strip Gap
+        canvas = Image.new('RGB', (canvas_w, canvas_h), canvas_color)
+
         usable_width = canvas_w - (2 * border_px) - gap_px
         strip_dest_w = usable_width // 2
         strip_dest_h = canvas_h - (2 * border_px)
 
-        # Resize the source strips to fit cleanly inside calculated boundaries
         resized_strip = self.current_strip.resize((strip_dest_w, strip_dest_h), Image.Resampling.LANCZOS)
 
-        # Coordinate calculations
         left_strip_x = border_px
         right_strip_x = border_px + strip_dest_w + gap_px
         strip_y = border_px
 
-        # Paste execution
         canvas.paste(resized_strip, (left_strip_x, strip_y))
         canvas.paste(resized_strip, (right_strip_x, strip_y))
 
@@ -404,22 +372,22 @@ class PhotoBoothApp(App):
         except Exception as e:
             print(f"Gallery Save Error: {e}")
 
-        # try:
-        #     canvas.save(temp_print_path, "JPEG", quality=100)
-        #     print_cmd = [
-        #         "lp", 
-        #         "-d", "EPSON_L3250_Series", 
-        #         "-o", "media=4x6.fullbleed",      
-        #         "-o", "page-left=0", "-o", "page-right=0",
-        #         "-o", "page-top=0", "-o", "page-bottom=0",
-        #         "-o", "scaling=100",               
-        #         "-o", "print-quality=4",
-        #         temp_print_path
-        #     ]
-        #     subprocess.run(print_cmd, check=True)
-        #     print("Print job sent successfully to L3250.")
-        # except Exception as e:
-        #     print(f"Print error: {e}")
+        try:
+            canvas.save(temp_print_path, "JPEG", quality=100)
+            print_cmd = [
+                "lp", 
+                "-d", "EPSON_L3250_Series", 
+                "-o", "media=4x6.fullbleed",      
+                "-o", "page-left=0", "-o", "page-right=0",
+                "-o", "page-top=0", "-o", "page-bottom=0",
+                "-o", "scaling=100",               
+                "-o", "print-quality=4",
+                temp_print_path
+            ]
+            subprocess.run(print_cmd, check=True)
+            print("Print job sent successfully to L3250.")
+        except Exception as e:
+            print(f"Print error: {e}")
 
         Clock.schedule_once(self.reset_to_start, 30.0)
 
