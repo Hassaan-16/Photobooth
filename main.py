@@ -29,16 +29,21 @@ from picamera2 import Picamera2
 class PhotoBoothApp(App):
 
     # --- GLOBAL ADJUSTABLE SETTINGS ---
-    ROW_GAP = 15 # 15      # Change this to 0, 10, 20 etc. (in pixels)
-    CORNER_RADIUS = 10 # 10 # Change this to round corners more or less
-    STRIP_W = 600 # 564     # Your fixed width to fit the 6mm center gap
-    STRIP_H = 1800    # Total strip height
+    ROW_GAP = 15          # Vertical gap between stacked photos (in pixels)
+    CORNER_RADIUS = 10    # Rounded corner factor for individual photos
+    STRIP_W = 600         # Total individual strip canvas width
+    STRIP_H = 1800        # Total strip height
     
     # BORDER & GAP CONTROLS (In Millimeters)
-    OUTER_BORDER_MM = 1.0   # 1mm border all around the 4x6 print
-    STRIP_GAP_MM = 2.0      # 2mm gap between the two strips
+    OUTER_BORDER_MM = 6.0   # 1mm solid black border all around the 4x6 print
+    H_OFFSET_MM = 1.0   # Shift content left to compensate for uneven printer overspray
+                        # Increase if right border still bigger, decrease if you overshoot
+
+    STRIP_GAP_MM = 2.0      # 2mm solid black vertical gap between the two strips
     DPI = 300               # Standard print DPI for 4x6 (1200x1800 px)
     # ----------------------------------
+    # print options
+    print_pic = 1 # 0 do not print / 1 print
 
     def build(self):
         Window.clearcolor = (0, 0, 0, 1) 
@@ -103,7 +108,7 @@ class PhotoBoothApp(App):
         try:
             overlay_raw = Image.open(os.path.join(self.asset_path, 'paper_overlay0.png')).convert("RGBA")
             overlay_resised = overlay_raw.rotate(90, expand=True).resize((1200, 1800), Image.Resampling.LANCZOS)
-            opacity_level = 0.1
+            opacity_level = 0
             r, g, b, a = overlay_resised.split()
             a = a.point(lambda p: int(p * opacity_level))
             self.paper_overlay = Image.merge("RGBA", (r, g, b, a))
@@ -259,49 +264,151 @@ class PhotoBoothApp(App):
 
     def process_background(self, mode):        
         photo_h = int((self.STRIP_H - (3 * self.ROW_GAP)) / 4)
-        photo_size = (self.STRIP_W, photo_h)
+        
+        # --- FIXED SIDE CUTOFF MATH ---
+        # If fuji is selected, intentionally inset the photo width by 16 pixels (8px padding left/right)
+        # This gives the outward concentric outlines native space to render inside the strip container
+        side_padding = 8 if mode == "fuji" else 0
+        photo_w = self.STRIP_W - (2 * side_padding)
+        photo_size = (photo_w, photo_h)
 
         round_mask = Image.new('L', photo_size, 0)
-        draw = ImageDraw.Draw(round_mask)
-        draw.rounded_rectangle((0, 0) + photo_size, radius=self.CORNER_RADIUS, fill=255)
+        draw_mask = ImageDraw.Draw(round_mask)
+        draw_mask.rounded_rectangle((0, 0) + photo_size, radius=self.CORNER_RADIUS, fill=255)
 
-        # Dynamic Strip Base Color Definition: White background for Fuji, Black for Sepia/BW
-        strip_bg_color = (255, 255, 255) if mode == "fuji" else (0, 0, 0)
-        single_strip = Image.new('RGB', (self.STRIP_W, self.STRIP_H), strip_bg_color)
+        if mode == "fuji":
+            single_strip = Image.new('RGBA', (self.STRIP_W, self.STRIP_H), (255, 255, 255, 255))
+        else:
+            single_strip = Image.new('RGB', (self.STRIP_W, self.STRIP_H), (0, 0, 0))
+
+        draw_strip = ImageDraw.Draw(single_strip)
 
         for i, img in enumerate(self.raw_photos):
             work = img.copy()
 
             if mode == "bw": 
                 work = ImageOps.grayscale(work).convert("RGB")
+
             elif mode == "fuji":
+                        # 1. Pink Tint Matrix: 
+                # Red is boosted (1.2) and Green is slightly lowered (0.9)
+                # This creates a subtle pink hue while keeping Blue neutral
                 pink_tint_matrix = (
-                    1.2,  0.0, 0.0, 0,    
-                    0.0,  0.9, 0.0, 0,    
-                    0.0,  0.0, 1.0, 0     
+                    1.15,  0.0, 0.0, 0,    # Red Channel (Boosted)
+                    0.0,  0.9, 0.0, 0,    # Green Channel (Lowered for pink shift)
+                    0.0,  0.0, 1.0, 0     # Blue Channel (Neutral)
                 )
                 work = work.convert("RGB", pink_tint_matrix)
-                work = ImageEnhance.Brightness(work).enhance(1.1)
+
+                # --- ADD HAZE EFFECT ---
+                # 1. Lift the shadows to make them milky/gray
+                np_work = np.array(work).astype(np.float32)
+                np_work = np_work + 5  # Lower this to 5 for less haze, raise to 15 for more
+                work = Image.fromarray(np.clip(np_work, 0, 255).astype(np.uint8))
+
+                # 2. Overlay a soft white haze layer
+                haze_overlay = Image.new("RGB", work.size, (255, 252, 240)) # Warm off-white
+                work = Image.blend(work, haze_overlay, alpha=0.12) # 12% haze intensity
+                
+                # 2. Softer Tone: Matte, airy feel
+                work = ImageEnhance.Brightness(work).enhance(0.9) # shifted from 1.1 to 0.9 to test
                 work = ImageEnhance.Contrast(work).enhance(0.8) 
+                
+                # 3. Soft Glow: Misty bloom effect
                 bloom = work.filter(ImageFilter.GaussianBlur(radius=10))
                 work = Image.blend(work, bloom, alpha=0.25) 
+                
+                # 4. Final Color: Keep saturation at 1.0 so the pink doesn't wash out
                 work = ImageEnhance.Color(work).enhance(1.0)
+    
+
             elif mode == "sepia":
-                sepia_matrix = np.array([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]])
+                # --- STAGE 1: AGGRESSIVE HIGHLIGHT RECOVERY & SHADOW LIFT ---
+                # Convert to 32-bit float array for precise lighting math
+                np_work = np.array(work).astype(np.float32)
+
+                # MATTE LIFT: Keeps shadows soft and prevents true blacks
+                np_work = np_work + 30 
+                
+                # EXTREAM HIGHLIGHT RECOVERY: Forces blown-out whites down even further
+                # Dropping the ceiling from 210 to 185 completely kills harsh ring-light hot spots
+                np_work = np_work * (185.0 / 255.0)
+                
+                # Clamp values to valid 0-255 range and rebuild PIL Image
+                np_work = np.clip(np_work, 0, 255).astype(np.uint8)
+                work = Image.fromarray(np_work)
+
+                # --- STAGE 2: SEPIA COLOR CONVERSION ---
+                sepia_matrix = np.array([[0.393, 0.769, 0.189], 
+                                         [0.349, 0.686, 0.168], 
+                                         [0.272, 0.534, 0.131]])
+                
                 work = Image.fromarray(np.clip(np.array(work).dot(sepia_matrix.T), 0, 255).astype(np.uint8))
+
+                # --- STAGE 3: GLOBAL DARKENING & TONAL SMOOTHING ---
+                # Changed from 0.95 to 0.85 to darken the entire image
+                work = ImageEnhance.Brightness(work).enhance(0.85)
+                # Low contrast keeps the compressed tones flat and matte
+                work = ImageEnhance.Contrast(work).enhance(0.80)
+
+                # --- STAGE 4: ORIGINAL OVAL VIGNETTE ---
+                width, height = work.size
                 vignette = Image.new('RGBA', work.size, (0, 0, 0, 0))
                 draw = ImageDraw.Draw(vignette)
-                width, height = work.size
                 draw.ellipse([-width*0.2, -height*0.2, width*1.2, height*1.2], fill=(0, 0, 0, 100))
                 vignette = vignette.filter(ImageFilter.GaussianBlur(radius=40))
                 work.paste(vignette, (0, 0), vignette)
 
+                # --- STAGE 5: LOW-INTENSITY HORIZONTAL BARS ---
+                bar_mask = Image.new('L', work.size, 0)
+                bar_draw = ImageDraw.Draw(bar_mask)
+                
+                # Slim 6% coverage bars
+                bar_thickness = int(height * 0.05)
+                bar_draw.rectangle([0, 0, width, bar_thickness], fill=240)
+                bar_draw.rectangle([0, height - bar_thickness, width, height], fill=240)
+                
+                bar_mask = bar_mask.filter(ImageFilter.GaussianBlur(radius=45))
+                
+                # Light 55 opacity overlay
+                bar_vignette = Image.new('RGBA', work.size, (0, 0, 0, 50))
+                bar_vignette.putalpha(bar_mask)
+                
+                work.paste(bar_vignette, (0, 0), bar_vignette)
+
             res = ImageOps.fit(work, photo_size, Image.Resampling.LANCZOS)
             y_pos = i * (photo_h + self.ROW_GAP)
-            single_strip.paste(res, (0, y_pos), round_mask)
+            x_pos = side_padding
 
-        self.current_strip = single_strip 
-        single_strip.save("temp_preview.png")
+            # Paste the crisp photo down onto the strip canvas with the left/right offset applied
+            single_strip.paste(res, (x_pos, y_pos), round_mask)
+
+            # --- POST-PASTE CONCENTRIC OUTWARD FEATHERING ENGINE (FUJI ONLY) ---
+            if mode == "fuji":
+                # Limit steps to the quarter mark of the row gap so row bounds don't crash
+                max_steps = max(1, int(self.ROW_GAP // 4)) if self.ROW_GAP > 0 else 4
+                
+                for offset in range(1, max_steps + 1):
+                    alpha_factor = 1.0 - (offset / (max_steps + 1))
+                    alpha_val = int(255 * alpha_factor * 0.45) 
+                    pink_rgba = (255, 182, 193, alpha_val)
+                    
+                    # Bounding box expands uniformly outwards across all four boundaries from the photo placement
+                    box = (
+                        x_pos - offset, 
+                        y_pos - offset, 
+                        x_pos + photo_w + offset, 
+                        y_pos + photo_h + offset
+                    )
+                    draw_strip.rounded_rectangle(
+                        box, 
+                        radius=self.CORNER_RADIUS + offset, 
+                        outline=pink_rgba, 
+                        width=1
+                    )
+
+        self.current_strip = single_strip.convert("RGB")
+        self.current_strip.save("temp_preview.png")
         Clock.schedule_once(self.display_filter_results, 0)
 
     def display_filter_results(self, dt):
@@ -324,6 +431,7 @@ class PhotoBoothApp(App):
         return int(round((mm / 25.4) * self.DPI))
 
     def initiate_print_flow(self, instance):
+        print_pic = self.print_pic
         timestamp = int(time.time())
         filename = f"print_{timestamp}.jpg"
         temp_print_path = "/tmp/booth_print.jpg"
@@ -335,18 +443,15 @@ class PhotoBoothApp(App):
         self.collage_left.opacity = 0
         self.collage_right.opacity = 0
 
-        canvas_w = 1200
-        canvas_h = 1800
+        # AFTER — add 2mm bleed on all 4 sides
+        BLEED_PX = 24  # 2mm at 300 DPI
+        canvas_w = 1200 + (BLEED_PX * 2)  # = 1248
+        canvas_h = 1800 + (BLEED_PX * 2)  # = 1848
 
         border_px = self.mm_to_px(self.OUTER_BORDER_MM)
         gap_px = self.mm_to_px(self.STRIP_GAP_MM)
 
-        # FLOW SEPARATION LOGIC: If filter is Fuji, print white canvas. Otherwise, black canvas.
-        if self.active_filter == "fuji":
-            canvas_color = (255, 255, 255)
-        else:
-            canvas_color = (0, 0, 0)
-
+        canvas_color = (255, 255, 255) if self.active_filter == "fuji" else (0, 0, 0)
         canvas = Image.new('RGB', (canvas_w, canvas_h), canvas_color)
 
         usable_width = canvas_w - (2 * border_px) - gap_px
@@ -355,12 +460,25 @@ class PhotoBoothApp(App):
 
         resized_strip = self.current_strip.resize((strip_dest_w, strip_dest_h), Image.Resampling.LANCZOS)
 
-        left_strip_x = border_px
-        right_strip_x = border_px + strip_dest_w + gap_px
+        h_offset_px = self.mm_to_px(self.H_OFFSET_MM)
+        left_strip_x = border_px - h_offset_px
+        right_strip_x = border_px + strip_dest_w + gap_px - h_offset_px
         strip_y = border_px
 
         canvas.paste(resized_strip, (left_strip_x, strip_y))
         canvas.paste(resized_strip, (right_strip_x, strip_y))
+
+        # --- SEPIA-ONLY MASK ENGINE ---
+        if self.active_filter != "fuji":
+            draw_mask = ImageDraw.Draw(canvas)
+            
+            draw_mask.rectangle((0, 0, canvas_w, border_px), fill=(0, 0, 0))
+            draw_mask.rectangle((0, canvas_h - border_px, canvas_w, canvas_h), fill=(0, 0, 0))
+            draw_mask.rectangle((0, 0, border_px, canvas_h), fill=(0, 0, 0))
+            draw_mask.rectangle((canvas_w - border_px, 0, canvas_w, canvas_h), fill=(0, 0, 0))
+
+            center_gap_start_x = left_strip_x + strip_dest_w
+            draw_mask.rectangle((center_gap_start_x, 0, center_gap_start_x + gap_px, canvas_h), fill=(0, 0, 0))
 
         if self.paper_overlay:
             canvas.paste(self.paper_overlay, (0, 0), self.paper_overlay)
@@ -372,22 +490,31 @@ class PhotoBoothApp(App):
         except Exception as e:
             print(f"Gallery Save Error: {e}")
 
-        try:
-            canvas.save(temp_print_path, "JPEG", quality=100)
-            print_cmd = [
-                "lp", 
-                "-d", "EPSON_L3250_Series", 
-                "-o", "media=4x6.fullbleed",      
-                "-o", "page-left=0", "-o", "page-right=0",
-                "-o", "page-top=0", "-o", "page-bottom=0",
-                "-o", "scaling=100",               
-                "-o", "print-quality=4",
-                temp_print_path
-            ]
-            subprocess.run(print_cmd, check=True)
-            print("Print job sent successfully to L3250.")
-        except Exception as e:
-            print(f"Print error: {e}")
+        if (print_pic == 1):
+            try:
+                canvas.save(temp_print_path, "JPEG", quality=100)
+                print_cmd = [
+                    "lp",
+                    "-d", "L3250-Series",
+                    "-o", "media=T4X6FULL",
+                    "-o", "MediaType=PMPHOTO_HIGH",
+                    "-o", "scaling=100",
+                    temp_print_path
+                ]
+                # print_cmd = [
+                #     "lp",
+                #     "-d", "L3250-Series",
+                #     "-o", "media=4X6FULL",
+                #     "-o", "MediaType=PMPHOTO_HIGH",
+                #     "-o", "page-left=0", "-o", "page-right=0",
+                #     "-o", "page-top=0", "-o", "page-bottom=0",
+                #     "-o", "scaling=100",
+                #     temp_print_path
+                # ]
+                subprocess.run(print_cmd, check=True)
+                print("Print job sent successfully to L3250.")
+            except Exception as e:
+                print(f"Print error: {e}")
 
         Clock.schedule_once(self.reset_to_start, 30.0)
 
