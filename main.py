@@ -35,9 +35,17 @@ class PhotoBoothApp(App):
     STRIP_H = 1800        # Total strip height
     
     # BORDER & GAP CONTROLS (In Millimeters)
-    OUTER_BORDER_MM = 6.0   # 1mm solid black border all around the 4x6 print
-    H_OFFSET_MM = 1.0   # Shift content left to compensate for uneven printer overspray
+    # OUTER_BORDER_MM = 3.15   # 1mm solid black border all around the 4x6 print
+    BORDER_SIDE_MM = 3.0    # left and right — currently fine, keep as is
+    BORDER_TB_MM = 5.0      # top and bottom — larger to survive vertical overspray
+    
+    H_OFFSET_MM = 0   # Shift content left to compensate for uneven printer overspray
                         # Increase if right border still bigger, decrease if you overshoot
+    V_OFFSET_MM = -1.0 #1.25 still bottom cutoff 
+    
+    ### ----- Controls;
+    # left --> " - " right --> " + "
+    # up --> " - " down --> " + "
 
     STRIP_GAP_MM = 2.0      # 2mm solid black vertical gap between the two strips
     DPI = 300               # Standard print DPI for 4x6 (1200x1800 px)
@@ -262,6 +270,13 @@ class PhotoBoothApp(App):
     def clear_status_message(self, dt):
         self.status_label.text = ""
 
+    def add_grain(self, img, intensity=10):
+        """Adds visual noise to mimic film grain"""
+        np_img = np.array(img).astype(np.float32)
+        noise = np.random.normal(0, intensity, np_img.shape)
+        np_img = np.clip(np_img + noise, 0, 255).astype(np.uint8)
+        return Image.fromarray(np_img)
+
     def process_background(self, mode):        
         photo_h = int((self.STRIP_H - (3 * self.ROW_GAP)) / 4)
         
@@ -288,41 +303,56 @@ class PhotoBoothApp(App):
 
             if mode == "bw": 
                 work = ImageOps.grayscale(work).convert("RGB")
+            
+                # 2. Increase Sharpness
+                # We use UnsharpMask or Sharpness enhancer for a crisp look
+                sharpener = ImageEnhance.Sharpness(work)
+                work = sharpener.enhance(2.5)  # 1.0 is original, 2.5 is high sharpness
+                
+                # 3. High Contrast
+                work = ImageEnhance.Contrast(work).enhance(1)
+                
+                # 4. Red-Brown Tint Matrix
+                rb_matrix = (1.15, 0, 0, 0, 0, 0.95, 0, 0, 0, 0, 0.85, 0)
+                work = work.convert("RGB", rb_matrix)
+                
+                # 5. Add Grain (Intensity 12 for gritty look)
+                work = self.add_grain(work, intensity=5)
 
             elif mode == "fuji":
-                        # 1. Pink Tint Matrix: 
-                # Red is boosted (1.2) and Green is slightly lowered (0.9)
-                # This creates a subtle pink hue while keeping Blue neutral
+                # 1. Pink Tint Matrix: 
+                # # Red is boosted (1.10) and Green is slightly lowered (0.9)
+                # # This creates a subtle pink hue while keeping Blue neutral
                 pink_tint_matrix = (
-                    1.15,  0.0, 0.0, 0,    # Red Channel (Boosted)
+                    1.10,  0.0, 0.0, 0,    # Red Channel (Boosted)
                     0.0,  0.9, 0.0, 0,    # Green Channel (Lowered for pink shift)
-                    0.0,  0.0, 1.0, 0     # Blue Channel (Neutral)
+                    0.0,  0.0, 0.91, 0     # Blue Channel (Neutral)ish
                 )
                 work = work.convert("RGB", pink_tint_matrix)
 
-                # --- ADD HAZE EFFECT ---
-                # 1. Lift the shadows to make them milky/gray
+                # # --- ADD HAZE EFFECT ---
+                # # 1. Lift the shadows to make them milky/gray
                 np_work = np.array(work).astype(np.float32)
                 np_work = np_work + 5  # Lower this to 5 for less haze, raise to 15 for more
                 work = Image.fromarray(np.clip(np_work, 0, 255).astype(np.uint8))
 
-                # 2. Overlay a soft white haze layer
+                # # 2. Overlay a soft white haze layer
                 haze_overlay = Image.new("RGB", work.size, (255, 252, 240)) # Warm off-white
                 work = Image.blend(work, haze_overlay, alpha=0.12) # 12% haze intensity
                 
-                # 2. Softer Tone: Matte, airy feel
+                # # 2. Softer Tone: Matte, airy feel
                 work = ImageEnhance.Brightness(work).enhance(0.9) # shifted from 1.1 to 0.9 to test
                 work = ImageEnhance.Contrast(work).enhance(0.8) 
                 
-                # 3. Soft Glow: Misty bloom effect
+                # # 3. Soft Glow: Misty bloom effect
                 bloom = work.filter(ImageFilter.GaussianBlur(radius=10))
                 work = Image.blend(work, bloom, alpha=0.25) 
                 
-                # 4. Final Color: Keep saturation at 1.0 so the pink doesn't wash out
-                work = ImageEnhance.Color(work).enhance(1.0)
-    
+                # # 4. Final Color: Keep saturation at 1.0 so the pink doesn't wash out
+                work = ImageEnhance.Color(work).enhance(1.0)            
 
-            elif mode == "sepia":
+            elif mode == "sepia":                
+
                 # --- STAGE 1: AGGRESSIVE HIGHLIGHT RECOVERY & SHADOW LIFT ---
                 # Convert to 32-bit float array for precise lighting math
                 np_work = np.array(work).astype(np.float32)
@@ -338,7 +368,7 @@ class PhotoBoothApp(App):
                 np_work = np.clip(np_work, 0, 255).astype(np.uint8)
                 work = Image.fromarray(np_work)
 
-                # --- STAGE 2: SEPIA COLOR CONVERSION ---
+                # --- STAGE 2: SEPIA COLOR CONVERSION ---                
                 sepia_matrix = np.array([[0.393, 0.769, 0.189], 
                                          [0.349, 0.686, 0.168], 
                                          [0.272, 0.534, 0.131]])
@@ -347,17 +377,18 @@ class PhotoBoothApp(App):
 
                 # --- STAGE 3: GLOBAL DARKENING & TONAL SMOOTHING ---
                 # Changed from 0.95 to 0.85 to darken the entire image
-                work = ImageEnhance.Brightness(work).enhance(0.85)
+                ##### work = ImageEnhance.Brightness(work).enhance(0.85)
+                
                 # Low contrast keeps the compressed tones flat and matte
-                work = ImageEnhance.Contrast(work).enhance(0.80)
+                ##### work = ImageEnhance.Contrast(work).enhance(0.80)
 
                 # --- STAGE 4: ORIGINAL OVAL VIGNETTE ---
                 width, height = work.size
-                vignette = Image.new('RGBA', work.size, (0, 0, 0, 0))
-                draw = ImageDraw.Draw(vignette)
-                draw.ellipse([-width*0.2, -height*0.2, width*1.2, height*1.2], fill=(0, 0, 0, 100))
-                vignette = vignette.filter(ImageFilter.GaussianBlur(radius=40))
-                work.paste(vignette, (0, 0), vignette)
+                # vignette = Image.new('RGBA', work.size, (0, 0, 0, 0))
+                # draw = ImageDraw.Draw(vignette)
+                # draw.ellipse([-width*0.2, -height*0.2, width*1.2, height*1.2], fill=(0, 0, 0, 100))
+                # vignette = vignette.filter(ImageFilter.GaussianBlur(radius=40))
+                # work.paste(vignette, (0, 0), vignette)
 
                 # --- STAGE 5: LOW-INTENSITY HORIZONTAL BARS ---
                 bar_mask = Image.new('L', work.size, 0)
@@ -382,8 +413,7 @@ class PhotoBoothApp(App):
 
             # Paste the crisp photo down onto the strip canvas with the left/right offset applied
             single_strip.paste(res, (x_pos, y_pos), round_mask)
-
-            # --- POST-PASTE CONCENTRIC OUTWARD FEATHERING ENGINE (FUJI ONLY) ---
+            
             if mode == "fuji":
                 # Limit steps to the quarter mark of the row gap so row bounds don't crash
                 max_steps = max(1, int(self.ROW_GAP // 4)) if self.ROW_GAP > 0 else 4
@@ -448,23 +478,28 @@ class PhotoBoothApp(App):
         canvas_w = 1200 + (BLEED_PX * 2)  # = 1248
         canvas_h = 1800 + (BLEED_PX * 2)  # = 1848
 
-        border_px = self.mm_to_px(self.OUTER_BORDER_MM)
+        # Convert border and gap settings from mm to pixels
+        border_side_px = self.mm_to_px(self.BORDER_SIDE_MM)
+        border_tb_px = self.mm_to_px(self.BORDER_TB_MM)
         gap_px = self.mm_to_px(self.STRIP_GAP_MM)
 
         canvas_color = (255, 255, 255) if self.active_filter == "fuji" else (0, 0, 0)
         canvas = Image.new('RGB', (canvas_w, canvas_h), canvas_color)
 
-        usable_width = canvas_w - (2 * border_px) - gap_px
+        # Calculate strip dimensions using independent side and top/bottom borders
+        usable_width = canvas_w - (2 * border_side_px) - gap_px
         strip_dest_w = usable_width // 2
-        strip_dest_h = canvas_h - (2 * border_px)
+        strip_dest_h = canvas_h - (2 * border_tb_px)
 
         resized_strip = self.current_strip.resize((strip_dest_w, strip_dest_h), Image.Resampling.LANCZOS)
 
+        # Coordinate calculations with horizontal offset only (V_OFFSET removed)
         h_offset_px = self.mm_to_px(self.H_OFFSET_MM)
-        left_strip_x = border_px - h_offset_px
-        right_strip_x = border_px + strip_dest_w + gap_px - h_offset_px
-        strip_y = border_px
+        left_strip_x = border_side_px - h_offset_px
+        right_strip_x = border_side_px + strip_dest_w + gap_px - h_offset_px
+        strip_y = border_tb_px
 
+        # Paste execution
         canvas.paste(resized_strip, (left_strip_x, strip_y))
         canvas.paste(resized_strip, (right_strip_x, strip_y))
 
@@ -472,10 +507,10 @@ class PhotoBoothApp(App):
         if self.active_filter != "fuji":
             draw_mask = ImageDraw.Draw(canvas)
             
-            draw_mask.rectangle((0, 0, canvas_w, border_px), fill=(0, 0, 0))
-            draw_mask.rectangle((0, canvas_h - border_px, canvas_w, canvas_h), fill=(0, 0, 0))
-            draw_mask.rectangle((0, 0, border_px, canvas_h), fill=(0, 0, 0))
-            draw_mask.rectangle((canvas_w - border_px, 0, canvas_w, canvas_h), fill=(0, 0, 0))
+            draw_mask.rectangle((0, 0, canvas_w, border_tb_px), fill=(0, 0, 0))
+            draw_mask.rectangle((0, canvas_h - border_tb_px, canvas_w, canvas_h), fill=(0, 0, 0))
+            draw_mask.rectangle((0, 0, border_side_px, canvas_h), fill=(0, 0, 0))
+            draw_mask.rectangle((canvas_w - border_side_px, 0, canvas_w, canvas_h), fill=(0, 0, 0))
 
             center_gap_start_x = left_strip_x + strip_dest_w
             draw_mask.rectangle((center_gap_start_x, 0, center_gap_start_x + gap_px, canvas_h), fill=(0, 0, 0))
@@ -484,6 +519,7 @@ class PhotoBoothApp(App):
             canvas.paste(self.paper_overlay, (0, 0), self.paper_overlay)
 
         try:
+            # add an if statement to set option to print
             save_file = os.path.join(self.save_path, filename)
             canvas.save(save_file, "JPEG", quality=95)
             print(f"Gallery image saved: {save_file}")
@@ -501,22 +537,14 @@ class PhotoBoothApp(App):
                     "-o", "scaling=100",
                     temp_print_path
                 ]
-                # print_cmd = [
-                #     "lp",
-                #     "-d", "L3250-Series",
-                #     "-o", "media=4X6FULL",
-                #     "-o", "MediaType=PMPHOTO_HIGH",
-                #     "-o", "page-left=0", "-o", "page-right=0",
-                #     "-o", "page-top=0", "-o", "page-bottom=0",
-                #     "-o", "scaling=100",
-                #     temp_print_path
-                # ]
+                
                 subprocess.run(print_cmd, check=True)
                 print("Print job sent successfully to L3250.")
             except Exception as e:
                 print(f"Print error: {e}")
 
-        Clock.schedule_once(self.reset_to_start, 30.0)
+        # goodbye screen timer
+        Clock.schedule_once(self.reset_to_start, 10.0)
 
     def reset_to_start(self, dt):
         if self.welcome_layer not in self.root.children:
