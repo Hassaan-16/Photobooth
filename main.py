@@ -4,12 +4,9 @@ import os
 import threading
 import subprocess
 
-import numpy as np
 from PIL import (
     Image,
     ImageOps,
-    ImageEnhance,
-    ImageFilter,
     ImageDraw,
 )
 
@@ -39,6 +36,9 @@ from kivy.core.window import Window
 
 from picamera2 import Picamera2
 
+import settings
+import filters
+
 
 # Debug: make all buttons visible yellow for positioning.
 # Set alpha to 0 when layout is finalised.
@@ -49,36 +49,9 @@ class PhotoBoothApp(App):
     """Main photobooth application."""
 
     # --- GLOBAL ADJUSTABLE SETTINGS ---
-
-    # Vertical gap between stacked photos (pixels)
-    ROW_GAP = 15
-    # Rounded corner factor for individual photos
-    CORNER_RADIUS = 10
-    # Total individual strip canvas width
-    STRIP_W = 600
-    # Total strip height
-    STRIP_H = 1800
-
-    # BORDER & GAP CONTROLS (millimetres)
-    # Left and right borders
-    BORDER_SIDE_MM = 3.0
-    # Top and bottom — larger to survive overspray
-    BORDER_TB_MM = 6.0
-
-    # Horizontal shift to compensate for uneven
-    # printer overspray.
-    # left --> " - "   right --> " + "
-    H_OFFSET_MM = 0
-
-    # 2mm solid black gap between the two strips
-    STRIP_GAP_MM = 2.0
-    # Standard print DPI for 4x6 (1200x1800 px)
-    DPI = 300
-
-    # ----------------------------------
-    # Print/save options: 0 = do not print, 1 = print
-    print_pic = 1
-    save_pic = 0
+    # All global settings now live in settings.py and are imported
+    # above. They are referenced directly as settings.X throughout
+    # this file (see mm_to_px, process_background, initiate_print_flow).
 
     def build(self):
         """Build and return the root widget."""
@@ -117,7 +90,7 @@ class PhotoBoothApp(App):
         # 1. Background Manager
         self.bg_manager = KivyImage(
             source=os.path.join(
-                self.asset_path, 'welcome.png'
+                self.asset_path, settings.BG_WELCOME
             ),
             allow_stretch=True,
             keep_ratio=False,
@@ -187,28 +160,33 @@ class PhotoBoothApp(App):
         self.root.add_widget(self.collage_right)
 
         # Load paper overlay
-        try:
-            overlay_raw = Image.open(
-                os.path.join(
-                    self.asset_path, 'paper_overlay0.png'
+        # Controlled by settings.OVERLAY_ENABLED / OVERLAY_OPACITY.
+        # When disabled, self.paper_overlay stays None and is simply
+        # skipped wherever it's pasted later on.
+        self.paper_overlay = None
+        if settings.OVERLAY_ENABLED:
+            try:
+                overlay_raw = Image.open(
+                    os.path.join(
+                        self.asset_path, settings.OVERLAY_PATH
+                    )
+                ).convert("RGBA")
+                overlay_resized = overlay_raw.rotate(
+                    90, expand=True
+                ).resize(
+                    (1200, 1800), Image.Resampling.LANCZOS
                 )
-            ).convert("RGBA")
-            overlay_resized = overlay_raw.rotate(
-                90, expand=True
-            ).resize(
-                (1200, 1800), Image.Resampling.LANCZOS
-            )
-            opacity_level = 0
-            r, g, b, a = overlay_resized.split()
-            a = a.point(
-                lambda p: int(p * opacity_level)
-            )
-            self.paper_overlay = Image.merge(
-                "RGBA", (r, g, b, a)
-            )
-        except Exception as e:
-            print(f"Overlay Load Error: {e}")
-            self.paper_overlay = None
+                opacity_level = settings.OVERLAY_OPACITY
+                r, g, b, a = overlay_resized.split()
+                a = a.point(
+                    lambda p: int(p * opacity_level)
+                )
+                self.paper_overlay = Image.merge(
+                    "RGBA", (r, g, b, a)
+                )
+            except Exception as e:
+                print(f"Overlay Load Error: {e}")
+                self.paper_overlay = None
 
         # 3. Filter Sidebar (with retake button)
         self.filter_layer = FloatLayout(
@@ -244,9 +222,12 @@ class PhotoBoothApp(App):
         self.root.add_widget(self.status_label)
 
         # 5. Countdown Label
+        # font_name uses the Didot font path from settings.py.
+        # See setup instructions for installing Didot on the Pi.
         self.overlay_label = Label(
             text="",
             font_size='250sp',
+            font_name=settings.COUNTDOWN_FONT_PATH,
             color=(1, 1, 1, 1),
         )
         self.root.add_widget(self.overlay_label)
@@ -546,7 +527,11 @@ class PhotoBoothApp(App):
         self.flash_color.a = 1
         frame = self.picam2.capture_array()
         img = Image.fromarray(frame)
-        img = ImageOps.mirror(img)
+        # Mirroring is controlled by settings.MIRROR_CAMERA.
+        # False (default) keeps the camera's original,
+        # non-mirrored orientation.
+        if settings.MIRROR_CAMERA:
+            img = ImageOps.mirror(img)
         b, g, r, a = img.split()
         self.raw_photos.append(
             Image.merge("RGB", (r, g, b))
@@ -596,21 +581,10 @@ class PhotoBoothApp(App):
         """Clear the status label."""
         self.status_label.text = ""
 
-    def add_grain(self, img, intensity=10):
-        """Add visual noise to mimic film grain."""
-        np_img = np.array(img).astype(np.float32)
-        noise = np.random.normal(
-            0, intensity, np_img.shape
-        )
-        np_img = np.clip(
-            np_img + noise, 0, 255
-        ).astype(np.uint8)
-        return Image.fromarray(np_img)
-
     def process_background(self, mode):
         """Process photos with the selected filter."""
         photo_h = int(
-            (self.STRIP_H - (3 * self.ROW_GAP)) / 4
+            (settings.STRIP_H - (3 * settings.ROW_GAP)) / 4
         )
 
         # --- FIXED SIDE CUTOFF MATH ---
@@ -618,27 +592,27 @@ class PhotoBoothApp(App):
         # outward concentric outlines have space to render
         # inside the strip container without clipping.
         side_padding = 8 if mode == "fuji" else 0
-        photo_w = self.STRIP_W - (2 * side_padding)
+        photo_w = settings.STRIP_W - (2 * side_padding)
         photo_size = (photo_w, photo_h)
 
         round_mask = Image.new('L', photo_size, 0)
         draw_mask = ImageDraw.Draw(round_mask)
         draw_mask.rounded_rectangle(
             (0, 0) + photo_size,
-            radius=self.CORNER_RADIUS,
+            radius=settings.CORNER_RADIUS,
             fill=255,
         )
 
         if mode == "fuji":
             single_strip = Image.new(
                 'RGBA',
-                (self.STRIP_W, self.STRIP_H),
+                (settings.STRIP_W, settings.STRIP_H),
                 (255, 255, 255, 255),
             )
         else:
             single_strip = Image.new(
                 'RGB',
-                (self.STRIP_W, self.STRIP_H),
+                (settings.STRIP_W, settings.STRIP_H),
                 (0, 0, 0),
             )
 
@@ -647,209 +621,15 @@ class PhotoBoothApp(App):
         for i, img in enumerate(self.raw_photos):
             work = img.copy()
 
-            if mode == "bw":
-                work = ImageOps.grayscale(
-                    work
-                ).convert("RGB")
-
-                # Increase Sharpness
-                # 1.0 = original, 2.5 = high sharpness
-                sharpener = ImageEnhance.Sharpness(work)
-                work = sharpener.enhance(2.5)
-
-                # High Contrast
-                work = ImageEnhance.Contrast(
-                    work
-                ).enhance(1)
-
-                # Red-Brown Tint Matrix
-                rb_matrix = (
-                    1.15, 0, 0, 0,
-                    0, 0.95, 0, 0,
-                    0, 0, 0.85, 0,
-                )
-                work = work.convert("RGB", rb_matrix)
-
-                # Add Grain (intensity 5 = subtle)
-                work = self.add_grain(
-                    work, intensity=5
-                )
-
-            elif mode == "fuji":
-                # 1. Pink Tint Matrix:
-                # Red boosted (1.10), Green lowered (0.9)
-                # Creates a subtle pink/warm hue.
-                # Blue lowered (0.91) adds yellow warmth.
-                pink_tint_matrix = (
-                    1.10, 0.0,  0.0,  0,  # Red (Boosted)
-                    0.0,  0.9,  0.0,  0,  # Green (Lowered)
-                    0.0,  0.0,  0.91, 0,  # Blue (Neutral)
-                )
-                work = work.convert(
-                    "RGB", pink_tint_matrix
-                )
-
-                # --- ADD HAZE EFFECT ---
-                # Lift shadows to make them milky/gray.
-                # 5 = less haze, 15 = more haze
-                np_work = np.array(work).astype(
-                    np.float32
-                )
-                np_work = np_work + 5
-                work = Image.fromarray(
-                    np.clip(
-                        np_work, 0, 255
-                    ).astype(np.uint8)
-                )
-
-                # Overlay a soft warm white haze layer
-                haze_overlay = Image.new(
-                    "RGB", work.size, (255, 252, 240)
-                )
-                # 12% haze intensity
-                work = Image.blend(
-                    work, haze_overlay, alpha=0.12
-                )
-
-                # Softer Tone: Matte, airy feel
-                # Brightness shifted from 1.1 to 0.9
-                work = ImageEnhance.Brightness(
-                    work
-                ).enhance(0.9)
-                work = ImageEnhance.Contrast(
-                    work
-                ).enhance(0.8)
-
-                # Soft Glow: Misty bloom effect
-                bloom = work.filter(
-                    ImageFilter.GaussianBlur(radius=10)
-                )
-                work = Image.blend(
-                    work, bloom, alpha=0.25
-                )
-
-                # Final Color: keep saturation at 1.0
-                # so the pink tint doesn't wash out
-                work = ImageEnhance.Color(
-                    work
-                ).enhance(1.0)
-
-            elif mode == "sepia":
-
-                # --- STAGE 1: HIGHLIGHT RECOVERY ---
-                # Convert to float for precise math
-                np_work = np.array(work).astype(
-                    np.float32
-                )
-
-                # MATTE LIFT: keeps shadows soft,
-                # prevents true blacks
-                np_work = np_work + 30
-
-                # HIGHLIGHT RECOVERY:
-                # Drops ceiling from 210 to 185 to
-                # kill harsh ring-light hot spots
-                np_work = np_work * (185.0 / 255.0)
-
-                # Clamp and rebuild PIL Image
-                np_work = np.clip(
-                    np_work, 0, 255
-                ).astype(np.uint8)
-                work = Image.fromarray(np_work)
-
-                # --- STAGE 2: SEPIA CONVERSION ---
-                sepia_matrix = np.array([
-                    [0.393, 0.769, 0.189],
-                    [0.349, 0.686, 0.168],
-                    [0.272, 0.534, 0.131],
-                ])
-
-                sepia_array = np.clip(
-                    np.array(work).dot(sepia_matrix.T),
-                    0,
-                    255,
-                ).astype(np.uint8)
-
-                # Force near-black pixels to pure black.
-                # Prevents CMY composite ink from fading
-                # to navy blue over time. Tune threshold.
-                luminance = sepia_array.mean(axis=2)
-                black_mask = luminance < 35
-                sepia_array[black_mask] = [0, 0, 0]
-
-                work = Image.fromarray(sepia_array)
-
-                # --- STAGE 3: TONAL SMOOTHING ---
-                # Uncomment to use:
-                # work = ImageEnhance.Brightness(
-                #     work
-                # ).enhance(0.85)
-                # work = ImageEnhance.Contrast(
-                #     work
-                # ).enhance(0.80)
-
-                # --- STAGE 4: OVAL VIGNETTE ---
-                width, height = work.size
-                # Uncomment to use:
-                # vignette = Image.new(
-                #     'RGBA', work.size, (0, 0, 0, 0)
-                # )
-                # draw = ImageDraw.Draw(vignette)
-                # draw.ellipse(
-                #     [
-                #         -width * 0.2,
-                #         -height * 0.2,
-                #         width * 1.2,
-                #         height * 1.2,
-                #     ],
-                #     fill=(0, 0, 0, 100),
-                # )
-                # vignette = vignette.filter(
-                #     ImageFilter.GaussianBlur(radius=40)
-                # )
-                # work.paste(vignette, (0, 0), vignette)
-
-                # --- STAGE 5: HORIZONTAL BARS ---
-                bar_mask = Image.new(
-                    'L', work.size, 0
-                )
-                bar_draw = ImageDraw.Draw(bar_mask)
-
-                # Slim 5% coverage bars top and bottom
-                bar_thickness = int(height * 0.05)
-                bar_draw.rectangle(
-                    [0, 0, width, bar_thickness],
-                    fill=240,
-                )
-                bar_draw.rectangle(
-                    [
-                        0,
-                        height - bar_thickness,
-                        width,
-                        height,
-                    ],
-                    fill=240,
-                )
-
-                bar_mask = bar_mask.filter(
-                    ImageFilter.GaussianBlur(radius=45)
-                )
-
-                # Light opacity 50 overlay
-                bar_vignette = Image.new(
-                    'RGBA', work.size, (0, 0, 0, 50)
-                )
-                bar_vignette.putalpha(bar_mask)
-                work.paste(
-                    bar_vignette, (0, 0), bar_vignette
-                )
+            # All per-photo filter effects now live in filters.py.
+            work = filters.apply_filter(work, mode)
 
             res = ImageOps.fit(
                 work,
                 photo_size,
                 Image.Resampling.LANCZOS,
             )
-            y_pos = i * (photo_h + self.ROW_GAP)
+            y_pos = i * (photo_h + settings.ROW_GAP)
             x_pos = side_padding
 
             # Paste photo onto strip with offset applied
@@ -860,9 +640,9 @@ class PhotoBoothApp(App):
             if mode == "fuji":
                 # Limit outline steps to quarter of the
                 # row gap so row bounds don't crash
-                if self.ROW_GAP > 0:
+                if settings.ROW_GAP > 0:
                     max_steps = max(
-                        1, int(self.ROW_GAP // 4)
+                        1, int(settings.ROW_GAP // 4)
                     )
                 else:
                     max_steps = 4
@@ -888,7 +668,7 @@ class PhotoBoothApp(App):
                     draw_strip.rounded_rectangle(
                         box,
                         radius=(
-                            self.CORNER_RADIUS + offset
+                            settings.CORNER_RADIUS + offset
                         ),
                         outline=pink_rgba,
                         width=1,
@@ -905,12 +685,12 @@ class PhotoBoothApp(App):
 
         if self.retake_used:
             self.bg_manager.source = os.path.join(
-                self.asset_path, 'filter_selection_print.png'
+                self.asset_path, settings.BG_FILTER_SELECT_NO_RETAKE
             )
 
         else:
             self.bg_manager.source = os.path.join(
-                self.asset_path, 'filter.png'
+                self.asset_path, settings.BG_FILTER_SELECT
             )
                         
         self.img_widget.opacity = 0
@@ -928,11 +708,11 @@ class PhotoBoothApp(App):
 
     def mm_to_px(self, mm):
         """Convert millimetres to pixels at target DPI."""
-        return int(round((mm / 25.4) * self.DPI))
+        return int(round((mm / 25.4) * settings.DPI))
 
     def initiate_print_flow(self, instance):
         """Save the final image and send to printer."""
-        print_pic = self.print_pic
+        print_pic = settings.PRINT_PIC
         timestamp = int(time.time())
         filename = f"print_{timestamp}.jpg"
         temp_print_path = "/tmp/booth_print.jpg"
@@ -940,7 +720,7 @@ class PhotoBoothApp(App):
         self.generate_report(filename)
 
         self.bg_manager.source = os.path.join(
-            self.asset_path, 'thankyou.png'
+            self.asset_path, settings.BG_THANKYOU
         )
         self._hide_all_filter_layers()
         self.collage_left.opacity = 0
@@ -953,10 +733,10 @@ class PhotoBoothApp(App):
 
         # Convert border and gap settings mm to pixels
         border_side_px = self.mm_to_px(
-            self.BORDER_SIDE_MM
+            settings.BORDER_SIDE_MM
         )
-        border_tb_px = self.mm_to_px(self.BORDER_TB_MM)
-        gap_px = self.mm_to_px(self.STRIP_GAP_MM)
+        border_tb_px = self.mm_to_px(settings.BORDER_TB_MM)
+        gap_px = self.mm_to_px(settings.STRIP_GAP_MM)
 
         canvas_color = (
             (255, 255, 255)
@@ -981,7 +761,7 @@ class PhotoBoothApp(App):
         )
 
         # Coordinate calculations with horizontal offset
-        h_offset_px = self.mm_to_px(self.H_OFFSET_MM)
+        h_offset_px = self.mm_to_px(settings.H_OFFSET_MM)
         left_strip_x = border_side_px - h_offset_px
         right_strip_x = (
             border_side_px
@@ -1051,15 +831,19 @@ class PhotoBoothApp(App):
             )
 
         
-        try:
-                # Save to gallery
-            save_file = os.path.join(
-                self.save_path, filename
-            )
-            canvas.save(save_file, "JPEG", quality=95)
-            print(f"Gallery image saved: {save_file}")
-        except Exception as e:
-            print(f"Gallery Save Error: {e}")
+        # Gallery save is controlled by settings.SAVE_PIC.
+        # Default is 0 (off) — the final print is not copied
+        # to the gallery folder unless explicitly enabled.
+        if settings.SAVE_PIC == 1:
+            try:
+                    # Save to gallery
+                save_file = os.path.join(
+                    self.save_path, filename
+                )
+                canvas.save(save_file, "JPEG", quality=95)
+                print(f"Gallery image saved: {save_file}")
+            except Exception as e:
+                print(f"Gallery Save Error: {e}")
 
         if print_pic == 1:
             try:
@@ -1085,7 +869,10 @@ class PhotoBoothApp(App):
                 print(f"Print error: {e}")
 
         # Goodbye screen timer
-        Clock.schedule_once(self.reset_to_start, 10.0)
+        Clock.schedule_once(
+            self.reset_to_start,
+            settings.GOODBYE_SCREEN_SECONDS,
+        )
 
     def reset_to_start(self, dt):
         """Return to welcome screen for the next user."""
@@ -1093,7 +880,7 @@ class PhotoBoothApp(App):
             self.root.add_widget(self.welcome_layer)
 
         self.bg_manager.source = os.path.join(
-            self.asset_path, 'welcome.png'
+            self.asset_path, settings.BG_WELCOME
         )
         self.img_widget.source = ""
         self.img_widget.opacity = 0
