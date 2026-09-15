@@ -1,0 +1,23 @@
+sudo apt update
+sudo apt install python3-venv libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+    pkg-config libgl1-mesa-dev libgles2-mesa-dev \
+    python3-setuptools libgstreamer1.0-dev gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x \
+    gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio -y --fix-missing
+
+
+pip install --upgrade pip setuptools wheel
+pip install kivy[base] Pillow numpy picamera2
+
+numpy:  pip install numpy
+
+pillow: pip install pillow
+
+kivy:   pip install kivy
+
+picamera 2: pip install picamera2
+
+        sudo apt install libcap-dev
+
+        sudo apt install libjpeg-dev libpng-dev
