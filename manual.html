@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Photobooth — User Manual</title>
+  <style>
+    /* ── Fonts ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d0d0f;
+      --surface:    #16161a;
+      --surface2:   #1e1e24;
+      --border:     #2a2a35;
+      --pink:       #e879a0;
+      --pink-dim:   #9d3f68;
+      --gold:       #f5c842;
+      --teal:       #38d9b0;
+      --blue:       #5b8dee;
+      --text:       #e8e8f0;
+      --text-dim:   #8888a0;
+      --code-bg:    #0a0a0e;
+      --radius:     12px;
+      --radius-sm:  6px;
+      --nav-w:      260px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar Nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--nav-w);
+      height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .nav-logo {
+      padding: 28px 24px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo .logo-icon {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .nav-logo h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.5px;
+    }
+
+    .nav-logo p {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    nav ul {
+      list-style: none;
+      padding: 16px 0;
+      flex: 1;
+    }
+
+    nav ul li a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 24px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    nav ul li a:hover {
+      color: var(--text);
+      background: var(--surface2);
+      border-left-color: var(--pink);
+    }
+
+    nav ul li a .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+
+    .nav-section-label {
+      padding: 16px 24px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      opacity: 0.6;
+    }
+
+    .nav-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ── Main Content ── */
+    main {
+      margin-left: var(--nav-w);
+      flex: 1;
+      max-width: 900px;
+      padding: 0 48px 80px;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 64px 0 48px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 56px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(232, 121, 160, 0.12);
+      border: 1px solid rgba(232, 121, 160, 0.3);
+      color: var(--pink);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 99px;
+      margin-bottom: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1.15;
+      background: linear-gradient(135deg, #fff 0%, var(--pink) 60%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .hero p {
+      font-size: 17px;
+      color: var(--text-dim);
+      max-width: 580px;
+      line-height: 1.6;
+    }
+
+    .hero-meta {
+      display: flex;
+      gap: 24px;
+      margin-top: 28px;
+      flex-wrap: wrap;
+    }
+
+    .hero-meta span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .hero-meta span strong { color: var(--text); }
+
+    /* ── Sections ── */
+    section {
+      margin-bottom: 64px;
+      scroll-margin-top: 32px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .icon-pink  { background: rgba(232,121,160,0.15); }
+    .icon-gold  { background: rgba(245,200,66,0.15); }
+    .icon-teal  { background: rgba(56,217,176,0.15); }
+    .icon-blue  { background: rgba(91,141,238,0.15); }
+    .icon-gray  { background: rgba(136,136,160,0.15); }
+
+    .section-header h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .section-header p {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* ── Steps ── */
+    .steps { display: flex; flex-direction: column; gap: 0; }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      position: relative;
+    }
+
+    .step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 44px;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .step-num {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--pink);
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .step-body {
+      padding-bottom: 28px;
+      flex: 1;
+    }
+
+    .step-body h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      padding-top: 8px;
+    }
+
+    .step-body p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.65;
+    }
+
+    /* ── Cards ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: var(--pink-dim); }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .card-title h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .card p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* ── Settings Table ── */
+    .settings-group {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .settings-group-header {
+      padding: 14px 20px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .settings-group-header h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.3px;
+    }
+
+    .setting-row {
+      display: grid;
+      grid-template-columns: 180px 80px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .setting-row:last-child { border-bottom: none; }
+    .setting-row:hover { background: var(--surface2); }
+
+    .setting-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--gold);
+    }
+
+    .setting-default {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--teal);
+      padding-top: 1px;
+    }
+
+    .setting-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.55;
+    }
+
+    /* ── Code Blocks ── */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-block-header span {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .code-block-header .dot-row {
+      display: flex; gap: 5px;
+    }
+
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red   { background: #ff5f57; }
+    .dot-yellow{ background: #febc2e; }
+    .dot-green { background: #28c840; }
+
+    .code-block pre {
+      padding: 18px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #cdd6f4;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .cm { color: #6c7086; }    /* comment */
+    .ck { color: #cba6f7; }    /* keyword */
+    .cs { color: #a6e3a1; }    /* string */
+    .cn { color: #fab387; }    /* number */
+    .cv { color: #f5c842; }    /* variable name */
+    .co { color: #89dceb; }    /* operator */
+
+    /* ── Asset Cards ── */
+    .asset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .asset-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .asset-preview {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+    }
+
+    .bg-welcome  { background: linear-gradient(135deg, #1a0a2e, #3d1a5c); }
+    .bg-filter   { background: linear-gradient(135deg, #0a1a2e, #1a3a5c); }
+    .bg-thankyou { background: linear-gradient(135deg, #0a2e1a, #1a5c3a); }
+    .bg-overlay  { background: repeating-linear-gradient(45deg, #1a1a1a 0, #1a1a1a 5px, #222 5px, #222 10px); }
+
+    .asset-info { padding: 14px 16px; }
+
+    .asset-filename {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+
+    .asset-folder {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .asset-info p {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* ── Filter Cards ── */
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .filter-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .filter-swatch {
+      height: 64px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 14px;
+    }
+
+    .swatch-fuji   { background: linear-gradient(90deg, #ffcce0, #ffe8d6, #ffd6f5); }
+    .swatch-sepia  { background: linear-gradient(90deg, #8b6914, #c4a35a, #6b4f0a); }
+    .swatch-bw     { background: linear-gradient(90deg, #111, #888, #eee); }
+
+    .filter-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .filter-card p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 10px;
+    }
+
+    .tag-pink  { background: rgba(232,121,160,0.15); color: var(--pink); }
+    .tag-teal  { background: rgba(56,217,176,0.15);  color: var(--teal); }
+    .tag-gray  { background: rgba(136,136,160,0.15); color: var(--text-dim); }
+
+    /* ── Callout Boxes ── */
+    .callout {
+      display: flex;
+      gap: 14px;
+      padding: 16px 18px;
+      border-radius: var(--radius);
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .callout-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+
+    .callout-tip  { background: rgba(56,217,176,0.08); border: 1px solid rgba(56,217,176,0.25); color: #a0f0dc; }
+    .callout-warn { background: rgba(245,200,66,0.08); border: 1px solid rgba(245,200,66,0.25); color: #f5e090; }
+    .callout-info { background: rgba(91,141,238,0.08); border: 1px solid rgba(91,141,238,0.25); color: #a8bff5; }
+
+    /* ── Toggle Table ── */
+    .toggle-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 12px 0;
+    }
+
+    .toggle-table th {
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--surface2);
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .toggle-table td {
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+
+    .toggle-table tr:last-child td { border-bottom: none; }
+
+    .toggle-table td:first-child {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--teal);
+      font-size: 13px;
+      width: 60px;
+    }
+
+    .toggle-table td:nth-child(2) {
+      color: var(--text);
+      font-weight: 500;
+      width: 120px;
+    }
+
+    /* ── Troubleshoot ── */
+    .trouble-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+
+    .trouble-item h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gold);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .trouble-item p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.65;
+    }
+
+    .trouble-item code {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--code-bg);
+      color: var(--teal);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    /* ── Flow Diagram ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+      margin: 20px 0;
+    }
+
+    .flow-node {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      position: relative;
+    }
+
+    .flow-node.accent { border-color: var(--pink-dim); color: var(--pink); }
+    .flow-node.end    { border-color: rgba(56,217,176,0.4); color: var(--teal); }
+
+    .flow-arrow {
+      padding: 4px 18px;
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .flow-arrow::before {
+      content: '';
+      display: block;
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin-left: 10px;
+    }
+
+    .flow-branch {
+      display: flex;
+      gap: 16px;
+      margin-left: 20px;
+      align-items: flex-start;
+    }
+
+    .flow-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-style: italic;
+      margin-top: 4px;
+      display: block;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      nav { display: none; }
+      main { margin-left: 0; padding: 0 24px 60px; }
+      .setting-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Sidebar Navigation ══ -->
+<nav>
+  <div class="nav-logo">
+    <span class="logo-icon">📸</span>
+    <h2>Photobooth v2</h2>
+    <p>Raspberry Pi 4B · Kivy</p>
+  </div>
+
+  <ul>
+    <li class="nav-section-label">Guide</li>
+    <li><a href="#overview"><span class="nav-icon">🏠</span> Overview</a></li>
+    <li><a href="#operating"><span class="nav-icon">▶️</span> Operating the Booth</a></li>
+    <li><a href="#flow"><span class="nav-icon">🔄</span> Session Flow</a></li>
+
+    <li class="nav-section-label">Configuration</li>
+    <li><a href="#settings"><span class="nav-icon">⚙️</span> Settings File</a></li>
+    <li><a href="#strip-layout"><span class="nav-icon">📐</span> Strip &amp; Layout</a></li>
+    <li><a href="#borders"><span class="nav-icon">🖨️</span> Borders &amp; Print</a></li>
+    <li><a href="#print-save"><span class="nav-icon">💾</span> Print &amp; Save</a></li>
+    <li><a href="#debug"><span class="nav-icon">🔧</span> Debug Mode</a></li>
+
+    <li class="nav-section-label">Assets</li>
+    <li><a href="#backgrounds"><span class="nav-icon">🖼️</span> Background Images</a></li>
+    <li><a href="#overlay"><span class="nav-icon">✨</span> Paper Overlay</a></li>
+    <li><a href="#filters"><span class="nav-icon">🎨</span> Filters</a></li>
+
+    <li class="nav-section-label">Reference</li>
+    <li><a href="#troubleshoot"><span class="nav-icon">🚑</span> Troubleshooting</a></li>
+    <li><a href="#files"><span class="nav-icon">📁</span> File Structure</a></li>
+    <li><a href="#danger"><span class="nav-icon">☠️</span> Danger Zone</a></li>
+    <li><a href="#credentials"><span class="nav-icon">🔑</span> Credentials</a></li>
+  </ul>
+
+  <div class="nav-footer">Epson L3252 · CUPS · Python 3</div>
+</nav>
+
+<!-- ══ Main Content ══ -->
+<main>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">📸 User Manual</div>
+    <h1>Photobooth v2<br/>Operator Guide</h1>
+    <p>Everything you need to operate the booth, customise the look, adjust print settings, and keep sessions running smoothly.</p>
+    <div class="hero-meta">
+      <span>🖥️ <strong>Platform:</strong> Raspberry Pi 4B</span>
+      <span>🖨️ <strong>Printer:</strong> Epson L3252</span>
+      <span>🐍 <strong>Runtime:</strong> Python 3 · Kivy</span>
+      <span>📄 <strong>Output:</strong> 4×6 inch photo print</span>
+    </div>
+  </div>
+
+  <!-- ── Overview ── -->
+  <section id="overview">
+    <div class="section-header">
+      <div class="section-icon icon-pink">🏠</div>
+      <div>
+        <h2>Overview</h2>
+        <p>What the photobooth does and how it is structured</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:20px; line-height:1.75;">
+      The photobooth captures 4 photos in a timed sequence, applies a film-style colour filter,
+      and prints a 4×6 sheet with two identical side-by-side photo strips — a classic photo-strip
+      format. Users can choose one of several filters and, if they wish, retake the sequence once.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title"><span>📷</span><h3>4-Photo Sequence</h3></div>
+        <p>The booth captures 4 photos with a 3-second countdown before each shot. A flash effect fires on capture.</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>🎨</span><h3>Filter Selection</h3></div>
+        <p>After capture, users pick a filter — Fuji (pink/warm film look) or Sepia (vintage warm tone).</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>🖨️</span><h3>4×6 Print</h3></div>
+        <p>Two strips are printed side-by-side on a 4×6 borderless sheet via the Epson L3252.</p>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>🔁</span><h3>One Retake</h3></div>
+        <p>Users get one opportunity to retake all 4 photos before being locked in to the print screen.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Operating the Booth ── -->
+  <section id="operating">
+    <div class="section-header">
+      <div class="section-icon icon-gold">▶️</div>
+      <div>
+        <h2>Operating the Booth</h2>
+        <p>Step-by-step guide for a complete session</p>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Power On</h3>
+          <p>Turn on the Raspberry Pi and the Epson L3252 printer. Wait for the Pi to fully boot into the desktop. The photobooth script starts automatically (or run it manually with <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:2px 5px; border-radius:4px;">python main.py</code>).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Welcome Screen</h3>
+          <p>The booth displays the <strong>welcome.png</strong> background. Tap the invisible start button (the lower-centre region of the screen) to begin a session.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Photo Sequence — 4 Shots</h3>
+          <p>The live camera preview appears. For each of the 4 photos: <em>"POSE!"</em> is displayed, followed by a 3-second countdown rendered in the <strong>Didot</strong> font. The screen flashes white on capture. The sequence repeats 4 times automatically. Captures use the camera's original (non-mirrored) orientation by default — see <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:2px 5px; border-radius:4px;">MIRROR_CAMERA</code> in Settings.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Filter Selection (First Visit)</h3>
+          <p>The <strong>filter.png</strong> screen is shown with the two processed strips previewed. Two filter buttons are available. Tap a filter to switch — it processes in the background. A <strong>retake button (✕)</strong> is visible in the top-left. A <strong>Print button</strong> is at the bottom-right.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h3>Optional: Retake</h3>
+          <p>Tap the ✕ button to retake all 4 photos. This uses the single available retake. After retaking, the <strong>filter_selection_print.png</strong> screen is shown — identical buttons but without the retake option. No further retakes are possible.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <h3>Print</h3>
+          <p>Tap the Print button. The <strong>thankyou.png</strong> screen is displayed while the image is processed and sent to the printer. The final 4×6 image is <strong>not</strong> saved to the <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:2px 5px; border-radius:4px;">gallery/</code> folder by default — set <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:2px 5px; border-radius:4px;">SAVE_PIC = 1</code> in Settings to enable that.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-body">
+          <h3>Reset</h3>
+          <p>After <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:2px 5px; border-radius:4px;">GOODBYE_SCREEN_SECONDS</code> (30 seconds by default), the booth automatically returns to the welcome screen, ready for the next group. The retake counter is reset.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Session Flow ── -->
+  <section id="flow">
+    <div class="section-header">
+      <div class="section-icon icon-teal">🔄</div>
+      <div>
+        <h2>Session Flow</h2>
+        <p>Visual diagram of the complete session lifecycle</p>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-node accent">Welcome Screen (welcome.png)</div>
+      <div class="flow-arrow">Tap Start</div>
+      <div class="flow-node">Photo Sequence — 4 Shots with countdown</div>
+      <div class="flow-arrow">All 4 captured → Fuji filter applied automatically</div>
+      <div class="flow-node">Filter Screen (filter.png) — retake available</div>
+
+      <div style="display:flex; gap:32px; margin:8px 0 4px 12px; align-items:flex-start;">
+        <div>
+          <span class="flow-label">Option A: Retake</span>
+          <div class="flow-node" style="margin-top:4px;">Retake Sequence (4 new shots)</div>
+          <div style="padding: 4px 18px; font-size:12px; color:var(--text-dim);">↓</div>
+          <div class="flow-node">Filter Screen (filter_selection_print.png)</div>
+          <div style="padding: 4px 18px; font-size:12px; color:var(--text-dim);">↓ Tap Print</div>
+        </div>
+        <div>
+          <span class="flow-label">Option B: Print directly</span>
+          <div style="padding: 28px 18px; font-size:12px; color:var(--text-dim);">↓ Tap Print</div>
+        </div>
+      </div>
+
+      <div class="flow-node">Send to Epson L3252 &amp; save to gallery/ (if SAVE_PIC = 1)</div>
+      <div class="flow-arrow">Print completes</div>
+      <div class="flow-node accent">Thank You Screen (thankyou.png) — 30 seconds (GOODBYE_SCREEN_SECONDS)</div>
+      <div class="flow-arrow">Auto-reset</div>
+      <div class="flow-node end">Welcome Screen — retake_used reset to False ✓</div>
+    </div>
+  </section>
+
+  <!-- ── Settings File ── -->
+  <section id="settings">
+    <div class="section-header">
+      <div class="section-icon icon-blue">⚙️</div>
+      <div>
+        <h2>Settings File</h2>
+        <p>How to use settings.py</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:16px; line-height:1.75;">
+      All adjustable constants live in <strong style="color:var(--gold);">settings.py</strong> in the same
+      folder as the main script. You never need to edit <strong>main.py</strong> to change how the
+      booth looks or behaves — everything is controlled from this one file, and it's imported directly
+      into <strong>main.py</strong>. Filter effect code itself (the actual colour/tone processing) lives
+      separately in <strong style="color:var(--gold);">filters.py</strong> — see the <a href="#filters" style="color:var(--teal);">Filters</a> section.
+    </p>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <div>Edit <strong>settings.py</strong> and restart the app to apply changes. No reboot needed — just close and re-run <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">python main.py</code>.</div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>settings.py — minimal example</span>
+      </div>
+      <pre><span class="cm"># Disable printing for a test run</span>
+<span class="cv">PRINT_PIC</span> <span class="co">=</span> <span class="cn">0</span>
+
+<span class="cm"># Make borders slightly bigger</span>
+<span class="cv">BORDER_TB_MM</span> <span class="co">=</span> <span class="cn">6.5</span>
+
+<span class="cm"># Mirror the camera image (default is the original, non-mirrored view)</span>
+<span class="cv">MIRROR_CAMERA</span> <span class="co">=</span> <span class="ck">False</span>
+
+<span class="cm"># Turn off yellow debug buttons (production)</span>
+<span class="cv">DEBUG_BTN_COLOR</span> <span class="co">=</span> (<span class="cn">0</span>, <span class="cn">0</span>, <span class="cn">0</span>, <span class="cn">0</span>)</pre>
+    </div>
+
+    <div class="settings-group" style="margin-top:20px;">
+      <div class="settings-group-header">
+        <span>📋</span>
+        <h3>All Settings Reference</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">MIRROR_CAMERA</span>
+        <span class="setting-default">False</span>
+        <span class="setting-desc">Whether the captured photo is horizontally flipped. <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">False</code> keeps the camera's true, original orientation. Set to <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">True</code> to mirror it like a selfie cam.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">COUNTDOWN_FONT_PATH</span>
+        <span class="setting-default">assets/fonts/Didot.ttf</span>
+        <span class="setting-desc">Path to the font used for the on-screen countdown ("3, 2, 1"). Defaults to a Didot font file — see the Didot font setup instructions supplied with the project.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BG_WELCOME</span>
+        <span class="setting-default">welcome.png</span>
+        <span class="setting-desc">Filename of the idle/welcome screen background, relative to <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">assets/</code>. Swap in a new welcome screen by just changing this filename.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BG_FILTER_SELECT</span>
+        <span class="setting-default">filter.png</span>
+        <span class="setting-desc">Filename of the filter-selection screen shown on the first attempt, while a retake is still available.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BG_FILTER_SELECT_NO_RETAKE</span>
+        <span class="setting-default">filter_selection_print.png</span>
+        <span class="setting-desc">Filename of the filter-selection screen shown after the one retake has been used (no retake button area needed on this image).</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BG_THANKYOU</span>
+        <span class="setting-default">thankyou.png</span>
+        <span class="setting-desc">Filename of the thank-you / printing screen background.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">OVERLAY_ENABLED</span>
+        <span class="setting-default">False</span>
+        <span class="setting-desc">Turns the paper texture overlay on the final print on or off. Off by default.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">OVERLAY_PATH</span>
+        <span class="setting-default">paper_overlay0.png</span>
+        <span class="setting-desc">Filename of the overlay image, relative to the <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">assets/</code> folder. Change this to point at a different overlay texture without touching main.py.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">OVERLAY_OPACITY</span>
+        <span class="setting-default">0.35</span>
+        <span class="setting-desc">Overlay strength used only when <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">OVERLAY_ENABLED = True</code>. 0.0 = invisible, 1.0 = fully opaque.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">ROW_GAP</span>
+        <span class="setting-default">15</span>
+        <span class="setting-desc">Vertical pixel gap between each of the 4 stacked photos on the strip. See <a href="#strip-layout" style="color:var(--teal);">Strip &amp; Layout</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">CORNER_RADIUS</span>
+        <span class="setting-default">10</span>
+        <span class="setting-desc">Rounded corner radius on each individual photo. See <a href="#strip-layout" style="color:var(--teal);">Strip &amp; Layout</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">STRIP_W</span>
+        <span class="setting-default">600</span>
+        <span class="setting-desc">Width of a single photo strip canvas in pixels. See <a href="#strip-layout" style="color:var(--teal);">Strip &amp; Layout</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">STRIP_H</span>
+        <span class="setting-default">1800</span>
+        <span class="setting-desc">Total height of a single photo strip in pixels. See <a href="#strip-layout" style="color:var(--teal);">Strip &amp; Layout</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BORDER_SIDE_MM</span>
+        <span class="setting-default">3.0</span>
+        <span class="setting-desc">Left/right border bleed in mm. See <a href="#borders" style="color:var(--teal);">Borders &amp; Print</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BORDER_TB_MM</span>
+        <span class="setting-default">6.0</span>
+        <span class="setting-desc">Top/bottom border bleed in mm. See <a href="#borders" style="color:var(--teal);">Borders &amp; Print</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">H_OFFSET_MM</span>
+        <span class="setting-default">0</span>
+        <span class="setting-desc">Horizontal shift to compensate for uneven overspray. See <a href="#borders" style="color:var(--teal);">Borders &amp; Print</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">STRIP_GAP_MM</span>
+        <span class="setting-default">2.0</span>
+        <span class="setting-desc">Width of the solid black gap between the two strips. See <a href="#borders" style="color:var(--teal);">Borders &amp; Print</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">DPI</span>
+        <span class="setting-default">300</span>
+        <span class="setting-desc">Print resolution in dots per inch. See <a href="#borders" style="color:var(--teal);">Borders &amp; Print</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">PRINT_PIC</span>
+        <span class="setting-default">1</span>
+        <span class="setting-desc">Whether the final image is sent to the printer. See <a href="#print-save" style="color:var(--teal);">Print &amp; Save</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">SAVE_PIC</span>
+        <span class="setting-default">0</span>
+        <span class="setting-desc">Whether a copy is saved to <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">gallery/</code>. Off by default. See <a href="#print-save" style="color:var(--teal);">Print &amp; Save</a>.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">GOODBYE_SCREEN_SECONDS</span>
+        <span class="setting-default">30.0</span>
+        <span class="setting-desc">How long the thank-you/goodbye screen is shown before the booth automatically resets to the welcome screen.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">DEBUG_BTN_COLOR</span>
+        <span class="setting-default">(1, 1, 0, 0)</span>
+        <span class="setting-desc">RGBA colour of all invisible touch buttons. See <a href="#debug" style="color:var(--teal);">Debug Mode</a>.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Strip & Layout ── -->
+  <section id="strip-layout">
+    <div class="section-header">
+      <div class="section-icon icon-pink">📐</div>
+      <div>
+        <h2>Strip &amp; Layout Settings</h2>
+        <p>Control photo dimensions, gaps, and corner style</p>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>📷</span>
+        <h3>Photo Strip Layout</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">ROW_GAP</span>
+        <span class="setting-default">15</span>
+        <span class="setting-desc">Vertical pixel gap between each of the 4 stacked photos on the strip. Set to 0 for no gap, increase for breathing room.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">CORNER_RADIUS</span>
+        <span class="setting-default">10</span>
+        <span class="setting-desc">Rounded corner radius on each individual photo. 0 = sharp square corners. 30 = very rounded.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">STRIP_W</span>
+        <span class="setting-default">600</span>
+        <span class="setting-desc">Width of a single photo strip canvas in pixels. Both strips share this width. Affects aspect ratio of each photo frame.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">STRIP_H</span>
+        <span class="setting-default">1800</span>
+        <span class="setting-desc">Total height of a single photo strip in pixels. Default of 1800 px aligns with the 4×6 canvas at 300 DPI.</span>
+      </div>
+    </div>
+
+    <div class="callout callout-warn">
+      <span class="callout-icon">⚠️</span>
+      <div>Changing <strong>STRIP_W</strong> or <strong>STRIP_H</strong> affects the aspect ratio of the photos on the printed strip. Only change these if you also adjust the print canvas dimensions.</div>
+    </div>
+  </section>
+
+  <!-- ── Borders & Print ── -->
+  <section id="borders">
+    <div class="section-header">
+      <div class="section-icon icon-gold">🖨️</div>
+      <div>
+        <h2>Borders &amp; Print Settings</h2>
+        <p>Control print margins, alignment, and DPI</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:20px; line-height:1.75;">
+      All values below are in <strong>millimetres (mm)</strong>. They are converted to pixels
+      automatically using the <code style="font-family:monospace; background:var(--code-bg); color:var(--gold); padding:2px 5px; border-radius:4px;">DPI</code> setting at print time.
+      The Epson L3252 oversprays the paper edges in borderless mode — these border settings act as
+      a bleed buffer to protect your content from being cut off.
+    </p>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>📏</span>
+        <h3>Border &amp; Gap Controls (mm)</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BORDER_SIDE_MM</span>
+        <span class="setting-default">3.0</span>
+        <span class="setting-desc">Black border on the left and right edges of the 4×6 canvas. Increase if content is being cropped on the sides.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">BORDER_TB_MM</span>
+        <span class="setting-default">5.0</span>
+        <span class="setting-desc">Black border on the top and bottom edges. Larger than side border to compensate for the printer's stronger vertical overspray. Increase if top or bottom is still cut off.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">H_OFFSET_MM</span>
+        <span class="setting-default">0</span>
+        <span class="setting-desc">Horizontal shift applied to both strips. Negative = shift left (right border grows). Positive = shift right (left border grows). Adjust in 0.5 mm steps after test prints.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">STRIP_GAP_MM</span>
+        <span class="setting-default">2.0</span>
+        <span class="setting-desc">Width of the solid black vertical gap between the left and right photo strips. This is the centre divider on the 4×6 sheet.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">DPI</span>
+        <span class="setting-default">300</span>
+        <span class="setting-desc">Print resolution in dots per inch. 300 DPI is standard for a 4×6 photo print. Do not change unless switching paper size or printer.</span>
+      </div>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">ℹ️</span>
+      <div><strong>Tuning tip:</strong> Print a test sheet and measure the actual border widths with a ruler. If the right border is 1 mm wider than the left, set <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">H_OFFSET_MM = 0.5</code>. If the top border is 2 mm larger than the bottom, increase <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">BORDER_TB_MM</code> by 1.</div>
+    </div>
+  </section>
+
+  <!-- ── Print & Save ── -->
+  <section id="print-save">
+    <div class="section-header">
+      <div class="section-icon icon-teal">💾</div>
+      <div>
+        <h2>Print &amp; Save Options</h2>
+        <p>Toggle printing and gallery saving independently</p>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>🖨️</span>
+        <h3>Output Controls</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">PRINT_PIC</span>
+        <span class="setting-default">1</span>
+        <span class="setting-desc">Controls whether the final composited image is sent to the Epson L3252 for printing.</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">SAVE_PIC</span>
+        <span class="setting-default">0</span>
+        <span class="setting-desc">Controls whether the final composited image is saved to the <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">gallery/</code> folder on disk for record-keeping. Off by default — set to <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">1</code> to enable saving a copy of every print.</span>
+      </div>
+    </div>
+
+    <table class="toggle-table" style="border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-top:16px;">
+      <tr><th>Value</th><th>Meaning</th><th>Use case</th></tr>
+      <tr>
+        <td>1</td>
+        <td>Enabled ✓</td>
+        <td>Normal operation — print or save as expected.</td>
+      </tr>
+      <tr>
+        <td>0</td>
+        <td>Disabled ✗</td>
+        <td>Testing mode — skip the action without errors. Useful for testing the UI without wasting paper or filling up storage.</td>
+      </tr>
+    </table>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <div>Set <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">PRINT_PIC = 0</code> when positioning buttons or adjusting the UI. This prevents the printer from being triggered on every test run.</div>
+    </div>
+  </section>
+
+  <!-- ── Debug Mode ── -->
+  <section id="debug">
+    <div class="section-header">
+      <div class="section-icon icon-gray">🔧</div>
+      <div>
+        <h2>Debug Mode</h2>
+        <p>Making invisible buttons visible during layout work</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:16px; line-height:1.75;">
+      All interactive buttons are transparent in production so they sit invisibly over artwork created in Canva.
+      During layout work, set <code style="font-family:monospace; background:var(--code-bg); color:var(--gold); padding:2px 5px; border-radius:4px;">DEBUG_BTN_COLOR</code> to a semi-transparent yellow so you can see exactly where each button is and adjust its position and size in the code.
+    </p>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>🟡</span><h3>Button Colour Setting</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">DEBUG_BTN_COLOR</span>
+        <span class="setting-default">(1,1,0,0.3)</span>
+        <span class="setting-desc">RGBA colour tuple applied to all invisible touch buttons. Format: (Red, Green, Blue, Alpha) — values 0.0 to 1.0.</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>settings.py</span>
+      </div>
+      <pre><span class="cm"># Debug — show buttons as semi-transparent yellow</span>
+<span class="cv">DEBUG_BTN_COLOR</span> <span class="co">=</span> (<span class="cn">1</span>, <span class="cn">1</span>, <span class="cn">0</span>, <span class="cn">0.3</span>)
+
+<span class="cm"># Production — fully invisible buttons</span>
+<span class="cv">DEBUG_BTN_COLOR</span> <span class="co">=</span> (<span class="cn">0</span>, <span class="cn">0</span>, <span class="cn">0</span>, <span class="cn">0</span>)</pre>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:13px; line-height:1.7; margin-top:4px;">
+      Each button's <strong>size_hint</strong> and <strong>pos_hint</strong> values in the code correspond to
+      fractions of the screen (0.0 – 1.0). Adjust these values while DEBUG_BTN_COLOR is active, then set it
+      back to invisible for the final build.
+    </p>
+  </section>
+
+  <!-- ── Background Images ── -->
+  <section id="backgrounds">
+    <div class="section-header">
+      <div class="section-icon icon-pink">🖼️</div>
+      <div>
+        <h2>Background Images</h2>
+        <p>The PNG screens shown at each stage of the session</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:20px; line-height:1.75;">
+      All background images live in the <code style="font-family:monospace; background:var(--code-bg); color:var(--gold); padding:2px 5px; border-radius:4px;">assets/</code> folder.
+      They are full-screen PNGs sized to <strong>1024 × 600 px</strong> (the screen resolution).
+      Design them in Canva or any tool, export as PNG, and drop the file into the assets folder.
+    </p>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:16px; line-height:1.75;">
+      The filenames themselves are no longer hardcoded in <strong>main.py</strong> — each screen's filename is
+      a setting in <strong style="color:var(--gold);">settings.py</strong>. To swap an image (e.g. give the
+      welcome screen a seasonal redesign), just rename your new PNG and update the matching setting below —
+      no code changes needed.
+    </p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>settings.py — background images</span>
+      </div>
+      <pre><span class="cm"># Idle / welcome screen</span>
+<span class="cv">BG_WELCOME</span> <span class="co">=</span> <span class="cs">"welcome.png"</span>
+<span class="cm"># Filter selection screen — shown on first attempt (retake available)</span>
+<span class="cv">BG_FILTER_SELECT</span> <span class="co">=</span> <span class="cs">"filter.png"</span>
+<span class="cm"># Filter selection screen — shown after the retake has been used</span>
+<span class="cv">BG_FILTER_SELECT_NO_RETAKE</span> <span class="co">=</span> <span class="cs">"filter_selection_print.png"</span>
+<span class="cm"># Thank-you / printing screen</span>
+<span class="cv">BG_THANKYOU</span> <span class="co">=</span> <span class="cs">"thankyou.png"</span></pre>
+    </div>
+
+    <div class="callout callout-warn">
+      <span class="callout-icon">⚠️</span>
+      <div>File names are case-sensitive. <strong>welcome.png</strong> and <strong>Welcome.png</strong> are treated as different files — whatever you type into <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">settings.py</code> must match the actual file in <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">assets/</code> exactly.</div>
+    </div>
+
+    <div class="asset-grid" style="margin-top:20px;">
+      <div class="asset-card">
+        <div class="asset-preview bg-welcome">🏠</div>
+        <div class="asset-info">
+          <div class="asset-filename">welcome.png</div>
+          <div class="asset-folder">assets/  ·  BG_WELCOME</div>
+          <p>Shown when the booth is idle, waiting for a new session. Should include visible instruction or branding. The start button is overlaid at the bottom-centre.</p>
+        </div>
+      </div>
+
+      <div class="asset-card">
+        <div class="asset-preview bg-filter">🎨</div>
+        <div class="asset-info">
+          <div class="asset-filename">filter.png</div>
+          <div class="asset-folder">assets/  ·  BG_FILTER_SELECT</div>
+          <p>Shown after capture when a retake is still available. Should include the two filter option areas, a Print button area, and a Retake (✕) button area in the top-left.</p>
+        </div>
+      </div>
+
+      <div class="asset-card">
+        <div class="asset-preview bg-filter" style="opacity:0.7;">🚫</div>
+        <div class="asset-info">
+          <div class="asset-filename">filter_selection_print.png</div>
+          <div class="asset-folder">assets/  ·  BG_FILTER_SELECT_NO_RETAKE</div>
+          <p>Shown after a retake has been used. Identical layout to filter.png but without the Retake button area. The ✕ button is hidden — this image should not show one.</p>
+        </div>
+      </div>
+
+      <div class="asset-card">
+        <div class="asset-preview bg-thankyou">🙏</div>
+        <div class="asset-info">
+          <div class="asset-filename">thankyou.png</div>
+          <div class="asset-folder">assets/  ·  BG_THANKYOU</div>
+          <p>Displayed after the Print button is tapped while the image is processed and sent to the printer. Shown for GOODBYE_SCREEN_SECONDS (30s by default) then auto-resets to welcome.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="margin-top:24px;">
+      <span class="callout-icon">ℹ️</span>
+      <div><strong>Design tip:</strong> In Canva, use a 1024 × 600 px frame. Place your filter selection circles and the Print / Retake button areas as visible design elements. Then, in <strong>main.py</strong>, adjust the invisible Kivy button's <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">size_hint</code> and <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">pos_hint</code> to align with your artwork using debug mode.</div>
+    </div>
+  </section>
+
+  <!-- ── Paper Overlay ── -->
+  <section id="overlay">
+    <div class="section-header">
+      <div class="section-icon icon-gold">✨</div>
+      <div>
+        <h2>Paper Overlay</h2>
+        <p>Optional texture layer applied on top of the final print image</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:16px; line-height:1.75;">
+      The paper overlay is a transparent RGBA PNG that can be composited on top of the finished 4×6 image
+      before saving and printing, to add a subtle paper grain or texture effect. It is now controlled by a
+      dedicated on/off switch in <strong style="color:var(--gold);">settings.py</strong>, and is <strong>off by default</strong> —
+      when disabled, the overlay image isn't even loaded at startup.
+    </p>
+
+    <div class="asset-card" style="max-width:320px; margin-bottom:20px;">
+      <div class="asset-preview bg-overlay">📄</div>
+      <div class="asset-info">
+        <div class="asset-filename">paper_overlay0.png</div>
+        <div class="asset-folder">assets/</div>
+        <p>RGBA PNG texture. Applied on top of the final 4×6 canvas before printing, only when OVERLAY_ENABLED is True. The filename is set by OVERLAY_PATH — swap in a different texture file without editing main.py.</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:12px;">
+      The overlay is turned on and tuned entirely from <strong>settings.py</strong>:
+    </p>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>settings.py — overlay controls</span>
+      </div>
+      <pre><span class="cm"># Turn the paper overlay on or off entirely</span>
+<span class="cv">OVERLAY_ENABLED</span> <span class="co">=</span> <span class="ck">False</span>
+
+<span class="cm"># Overlay image filename, relative to assets/</span>
+<span class="cv">OVERLAY_PATH</span> <span class="co">=</span> <span class="cs">"paper_overlay0.png"</span>
+
+<span class="cm"># Only used when OVERLAY_ENABLED is True</span>
+<span class="cm"># 0.0 = fully invisible, 1.0 = fully opaque overlay</span>
+<span class="cv">OVERLAY_OPACITY</span> <span class="co">=</span> <span class="cn">0.35</span></pre>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <div>To enable the overlay, set <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">OVERLAY_ENABLED = True</code> in <strong>settings.py</strong> and tune <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">OVERLAY_OPACITY</code> to taste. To add a subtle film grain, scan a piece of aged paper and save it as an RGBA PNG — start with opacity around <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">0.1–0.15</code>.</div>
+    </div>
+  </section>
+
+  <!-- ── Filters ── -->
+  <section id="filters">
+    <div class="section-header">
+      <div class="section-icon icon-teal">🎨</div>
+      <div>
+        <h2>Filters</h2>
+        <p>Available colour filters and how to tune them</p>
+      </div>
+    </div>
+
+    <p style="color:var(--text-dim); font-size:14px; margin-bottom:20px; line-height:1.75;">
+      All filter code now lives in its own file, <strong style="color:var(--gold);">filters.py</strong> — one function per
+      filter (<code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">apply_fuji()</code>,
+      <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">apply_sepia()</code>,
+      <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">apply_bw()</code>) plus a shared
+      <code style="font-family:monospace; background:var(--code-bg); color:var(--teal); padding:1px 4px; border-radius:3px;">apply_filter(work, mode)</code> dispatcher
+      that <strong>main.py</strong> calls during <code style="font-family:monospace; background:var(--code-bg); color:var(--gold); padding:2px 5px; border-radius:4px;">process_background()</code>.
+      All filter parameters are commented inline in <strong>filters.py</strong> — find the filter you want to tune and adjust the values directly there. <strong>main.py</strong> itself no longer contains any filter logic.
+    </p>
+
+    <div class="filter-grid">
+      <div class="filter-card">
+        <div class="filter-swatch swatch-fuji"></div>
+        <h3>Fuji 🌸</h3>
+        <p>Warm pink film aesthetic. Applies a pink tint matrix, soft haze lift, warm white overlay blend, reduced brightness and contrast, and a subtle bloom glow. White/cream canvas background on the strip.</p>
+        <span class="tag tag-pink">Default filter</span>
+      </div>
+
+      <div class="filter-card">
+        <div class="filter-swatch swatch-sepia"></div>
+        <h3>Sepia 🕰️</h3>
+        <p>Vintage warm tone. Aggressive highlight recovery, matte shadow lift, classic sepia matrix conversion, and optional oval vignette and horizontal bar effects. Black canvas strip background.</p>
+        <span class="tag tag-teal">Dark strip</span>
+      </div>
+
+      <div class="filter-card">
+        <div class="filter-swatch swatch-bw"></div>
+        <h3>B&amp;W 🎞️</h3>
+        <p>High-contrast black and white with a subtle red-brown tint matrix, increased sharpness, and film grain. Currently available in the code but not wired to a UI button.</p>
+        <span class="tag tag-gray">Unlisted</span>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="margin-top:24px;">
+      <span class="callout-icon">ℹ️</span>
+      <div><strong>Tuning filters:</strong> All adjustable values inside each filter block have inline comments explaining what each number does. For example, in the Fuji filter: <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">np_work + 5</code> controls haze intensity — lower = less haze, higher = more milky. The colour matrix values control individual RGB channel boosts.</div>
+    </div>
+  </section>
+
+  <!-- ── Troubleshooting ── -->
+  <section id="troubleshoot">
+    <div class="section-header">
+      <div class="section-icon icon-gray">🚑</div>
+      <div>
+        <h2>Troubleshooting</h2>
+        <p>Common issues and how to fix them</p>
+      </div>
+    </div>
+
+    <div class="trouble-item">
+      <h3>🖨️ Printer shows "waiting for printer to become available"</h3>
+      <p>The <code>usblp</code> kernel module is conflicting with CUPS. Run:<br/>
+      <code>echo "blacklist usblp" | sudo tee /etc/modprobe.d/blacklist-usblp.conf</code><br/>
+      <code>sudo modprobe -r usblp && sudo systemctl restart cups</code><br/>
+      This is a permanent fix — the module will not reload after reboot.</p>
+    </div>
+
+    <div class="trouble-item">
+      <h3>📐 Print has white borders instead of being borderless</h3>
+      <p>The media type <code>T4X6FULL</code> (Trimless/Borderless) must be used. Verify the printer queue name with <code>lpstat -p</code> and check that your PPD supports this size via <code>lpoptions -p L3250-Series -l | grep PageSize</code>. The print command in the code already uses <code>T4X6FULL</code>.</p>
+    </div>
+
+    <div class="trouble-item">
+      <h3>✂️ Content is being cut off on the edges</h3>
+      <p>The printer oversprays by ~2 mm in borderless mode. Increase <code>BORDER_TB_MM</code> or <code>BORDER_SIDE_MM</code> in <code>settings.py</code> to add more bleed buffer. Start with <code>BORDER_TB_MM = 6.0</code> and print a test.</p>
+    </div>
+
+    <div class="trouble-item">
+      <h3>⬅️ One border is larger than the opposite border</h3>
+      <p>Uneven overspray from the printer. Use <code>H_OFFSET_MM</code> in <code>settings.py</code> to shift the strips horizontally, or adjust <code>BORDER_TB_MM</code> vertically. Adjust in 0.5 mm steps and reprint.</p>
+    </div>
+
+    <div class="trouble-item">
+      <h3>🔵 Sepia black tones turn navy blue after a week</h3>
+      <p>The printer is using a CMY ink mix instead of pure black ink for near-black pixels. In <code>apply_sepia()</code> in <code>filters.py</code>, add a black mask to force shadow pixels to pure <code>(0,0,0)</code> before printing. Also ensure you are using genuine Epson ink cartridges — third-party inks fade unevenly.</p>
+    </div>
+
+    <div class="trouble-item">
+      <h3>📷 Camera not detected on startup</h3>
+      <p>Ensure the camera ribbon cable is firmly seated. Run <code>rpicam-hello</code> in the terminal to verify the camera is accessible. The app will call <code>safe_exit()</code> automatically if <code>Picamera2</code> fails to initialise.</p>
+    </div>
+  </section>
+
+  <!-- ── File Structure ── -->
+  <section id="files">
+    <div class="section-header">
+      <div class="section-icon icon-blue">📁</div>
+      <div>
+        <h2>File Structure</h2>
+        <p>Where everything lives on disk</p>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>Project directory layout</span>
+      </div>
+      <pre><span class="cv">photobooth/</span>
+├── <span class="cs">main.py</span>               <span class="cm"># Main application — imports settings.py and filters.py</span>
+├── <span class="cs">settings.py</span>           <span class="cm"># ← All settings live here. Edit this file.</span>
+├── <span class="cs">filters.py</span>            <span class="cm"># All filter effects (fuji / sepia / bw), unchanged logic</span>
+├── <span class="cs">requirements.txt</span>      <span class="cm"># Python dependencies (kivy, numpy, Pillow, picamera2)</span>
+│
+├── <span class="cv">assets/</span>                <span class="cm"># All image assets</span>
+│   ├── <span class="cs">welcome.png</span>        <span class="cm"># Idle / welcome screen (1024×600)</span>
+│   ├── <span class="cs">filter.png</span>         <span class="cm"># Filter select — retake available</span>
+│   ├── <span class="cs">filter_selection_print.png</span> <span class="cm"># Filter select — retake used</span>
+│   ├── <span class="cs">thankyou.png</span>       <span class="cm"># Thank-you / printing screen</span>
+│   ├── <span class="cs">paper_overlay0.png</span> <span class="cm"># Optional paper texture (RGBA, off by default)</span>
+│   └── <span class="cv">fonts/</span>
+│       └── <span class="cs">Didot.ttf</span>      <span class="cm"># Countdown timer font (see COUNTDOWN_FONT_PATH)</span>
+│
+├── <span class="cv">gallery/</span>               <span class="cm"># Saved 4×6 JPEG prints (auto-created, off by default)</span>
+│   └── <span class="cs">print_1234567890.jpg</span>
+│
+└── <span class="cv">reports/</span>               <span class="cm"># Daily print count logs (auto-created)</span>
+    └── <span class="cv">JUL-25/</span>
+        └── <span class="cs">26-07-25.txt</span></pre>
+    </div>
+  </section>
+
+  <!-- ── Danger Zone ── -->
+  <section id="danger">
+    <div class="section-header">
+      <div class="section-icon icon-gray" style="background:rgba(255,95,87,0.15);">☠️</div>
+      <div>
+        <h2>Danger Zone</h2>
+        <p>Destructive terminal commands — read the warnings before running anything here</p>
+      </div>
+    </div>
+
+    <div class="callout callout-warn" style="background:rgba(255,95,87,0.1); border-color:rgba(255,95,87,0.4); color:#ffb3ad;">
+      <span class="callout-icon">☠️</span>
+      <div><strong>Read this before you touch the terminal.</strong> Every command on this page is destructive
+      and cannot be undone. They are meant for a stuck booth during an active event, not routine use.
+      If you are not sure what a command does, do not run it — ask someone who does, or restart the whole Pi
+      instead (<code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">sudo reboot</code>)
+      rather than guessing.</div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>🖨️</span>
+        <h3>Cancel All Print Jobs</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">cancel -a</span>
+        <span class="setting-default"></span>
+        <span class="setting-desc">Cancels every pending and active print job in the CUPS queue for all printers on the system — not just the current job.</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>terminal — cancel every queued print job</span>
+      </div>
+      <pre><span class="cm"># Cancels ALL jobs on ALL printers, queued and in-progress.</span>
+<span class="cm"># There is no confirmation prompt and no undo.</span>
+<span class="cv">cancel</span> -a
+
+<span class="cm"># To target only the Epson L3252 queue instead of every printer:</span>
+<span class="cv">cancel</span> -a L3250-Series</pre>
+    </div>
+
+    <div class="callout callout-warn">
+      <span class="callout-icon">⚠️</span>
+      <div><strong>Caution:</strong> <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">cancel -a</code>
+      with no printer name clears jobs on <strong>every</strong> configured printer, not just the booth's Epson L3252.
+      If a print is already physically feeding through the printer when you cancel it, the printer may still finish
+      that physical sheet or jam mid-print — clear the paper path afterward if needed. Only run this if prints are
+      visibly stuck or duplicating; it will not recover a job you actually wanted.</div>
+    </div>
+
+    <div class="settings-group" style="margin-top:28px;">
+      <div class="settings-group-header">
+        <span>🛑</span>
+        <h3>Force-Kill the Booth Application</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">pkill -9 -f main.py</span>
+        <span class="setting-default"></span>
+        <span class="setting-desc">Immediately kills the running photobooth process (and any of its child threads) with no cleanup.</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>terminal — force-kill everything</span>
+      </div>
+      <pre><span class="cm"># Force-kills the photobooth app. SIGKILL — no graceful shutdown,</span>
+<span class="cm"># camera handle and GPU/display resources are NOT released cleanly.</span>
+<span class="cv">pkill</span> -9 -f main.py
+
+<span class="cm"># If the camera then refuses to reopen ("device busy"), also clear</span>
+<span class="cm"># any leftover picamera2/libcamera process before relaunching:</span>
+<span class="cv">pkill</span> -9 -f libcamera</pre>
+    </div>
+
+    <div class="callout callout-warn" style="background:rgba(255,95,87,0.1); border-color:rgba(255,95,87,0.4); color:#ffb3ad;">
+      <span class="callout-icon">☠️</span>
+      <div><strong>High caution:</strong> <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">pkill -9</code>
+      sends <strong>SIGKILL</strong> — the app is terminated instantly with no chance to close the camera, finish
+      writing a file, or shut down cleanly. Possible side effects: a half-written JPEG in <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">gallery/</code>
+      or <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">reports/</code>,
+      or the camera left in a locked state that blocks the next launch until the Pi is rebooted. Prefer closing the
+      app normally (press <strong>Esc</strong> — this calls <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">safe_exit()</code>
+      and releases the camera properly) or <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">sudo reboot</code>
+      whenever either option is available. Only reach for <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">pkill -9</code>
+      when the app is fully frozen and unresponsive to Esc.</div>
+    </div>
+
+    <div class="settings-group" style="margin-top:28px;">
+      <div class="settings-group-header">
+        <span>🔌</span>
+        <h3>Shut Down the Raspberry Pi</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">sudo poweroff</span>
+        <span class="setting-default"></span>
+        <span class="setting-desc">Cleanly shuts down and powers off the Pi. Wait for the green activity LED to stop blinking before cutting the power at the wall.</span>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block-header">
+        <div class="dot-row"><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span></div>
+        <span>terminal — power off the Pi</span>
+      </div>
+      <pre><span class="cm"># Shuts down the entire Raspberry Pi, not just the app.</span>
+<span class="cm"># All unsaved work and open sessions are lost.</span>
+<span class="cv">sudo</span> poweroff</pre>
+    </div>
+
+    <div class="callout callout-warn" style="background:rgba(255,95,87,0.1); border-color:rgba(255,95,87,0.4); color:#ffb3ad;">
+      <span class="callout-icon">☠️</span>
+      <div><strong>High caution:</strong> <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">sudo poweroff</code>
+      shuts down the <strong>entire Pi</strong>, not just the photobooth app — the booth will go completely dark
+      and stay off until someone is physically present to reconnect power and boot it back up. Never run this
+      mid-event unless you intend to end the session entirely (e.g. packing up at the end of the night). If you
+      just need to restart the software, close the app with <strong>Esc</strong> instead, or use
+      <code style="font-family:monospace; background:rgba(0,0,0,0.3); padding:2px 5px; border-radius:3px;">sudo reboot</code>
+      if the Pi itself needs a fresh boot but should come back online automatically.</div>
+    </div>
+  </section>
+
+  <!-- ── Credentials ── -->
+  <section id="credentials">
+    <div class="section-header">
+      <div class="section-icon icon-gray">🔑</div>
+      <div>
+        <h2>Credentials</h2>
+        <p>System access details for maintenance — internal use only</p>
+      </div>
+    </div>
+
+    <div class="callout callout-warn">
+      <span class="callout-icon">⚠️</span>
+      <div><strong>Internal use only.</strong> This page is not for public distribution — it contains plaintext system credentials for the booth hardware.</div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>🖥️</span>
+        <h3>Raspberry Pi Login</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">Username</span>
+        <span class="setting-default"></span>
+        <span class="setting-desc">raspberry</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">Password</span>
+        <span class="setting-default"></span>
+        <span class="setting-desc">pi</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-header">
+        <span>🔐</span>
+        <h3>Keyring</h3>
+      </div>
+      <div class="setting-row">
+        <span class="setting-name">Keyring password</span>
+        <span class="setting-default"></span>
+        <span class="setting-desc">bookworm</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>
